@@ -95,9 +95,37 @@ The project is provided as C# source code:
 
 DZRP enables VS Code debugging of Z80 programs running in the emulator.
 
-### Quick Start
+### Command-Line Options
 
-1. **Enable DZRP** in ZX Speculator (set `IsDzrpEnabled = true` in settings)
+```bash
+# Enable DZRP for local debugging
+./ZXSpeculator --dzrp
+
+# Enable DZRP for remote access (from other machines)
+./ZXSpeculator --dzrp --dzrp-bind 0.0.0.0
+
+# Custom port
+./ZXSpeculator --dzrp --dzrp-port 12000
+
+# Full example: remote access on custom port
+./ZXSpeculator --dzrp --dzrp-bind 0.0.0.0 --dzrp-port 11000
+```
+
+### Remote Development with mzrun
+
+Run the emulator on a machine with a display, debug from anywhere:
+
+```bash
+# On macOS (with display)
+./ZXSpeculator --dzrp --dzrp-bind 0.0.0.0
+
+# From dev machine (Linux, Windows, etc.)
+./mzrun --host mac-host.local program.minz
+```
+
+### Quick Start (VS Code + DeZog)
+
+1. **Start emulator**: `./ZXSpeculator --dzrp`
 2. **Install DeZog** in VS Code: `code --install-extension maziac.dezog`
 3. **Create `.vscode/launch.json`**:
 ```json

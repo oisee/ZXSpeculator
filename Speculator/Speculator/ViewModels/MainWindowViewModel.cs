@@ -11,6 +11,7 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using Avalonia;
 using Avalonia.Threading;
 using CSharp.Core.Commands;
@@ -41,26 +42,33 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
             if (!Speccy.TheTapeLoader.IsLoading)
                 Dispatcher.UIThread.InvokeAsync(LoadGameRom);
         };
-        
+
         Speccy.CpuHistory.Activated += (_, _) => Speccy.EmulationSpeed = ClockSync.Speed.Actual;
-        
+
         Mru = new MruFiles().InitFromString(Settings.MruFiles);
         Mru.OpenRequested += (_, file) => Speccy.LoadRom(file);
-        
+
         RomSelectorDetails = new RomSelectorViewModel(Speccy);
         RomSelectorDetails.LoadBasicRomAction(Settings.RomFile);
+
+        // Parse DZRP command-line arguments (override settings)
+        ParseDzrpArgs(args);
 
         Settings.PropertyChanged += (_, _) => OnSettingsChanged(true);
         OnSettingsChanged(false);
 
         if (args != null && args.Length > 0)
         {
-            var file = args[^1];
-            var info = new FileInfo(file);
-            if (ZxFileIo.IsInstantLoadSupported(info))
+            // Find last arg that's not a DZRP flag
+            var file = args.LastOrDefault(a => !a.StartsWith("--dzrp") && !IsArgValue(args, a));
+            if (file != null)
             {
-                Console.WriteLine("Loading: " + file);
-                OneShotDispatcherTimer.CreateAndStart(TimeSpan.FromSeconds(3), () => LoadGameRomDirect(info));
+                var info = new FileInfo(file);
+                if (ZxFileIo.IsInstantLoadSupported(info))
+                {
+                    Console.WriteLine("Loading: " + file);
+                    OneShotDispatcherTimer.CreateAndStart(TimeSpan.FromSeconds(3), () => LoadGameRomDirect(info));
+                }
             }
         }
 
@@ -210,5 +218,50 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
     {
         Speccy.Dispose();
         Settings.MruFiles = Mru.AsString();
+    }
+
+    /// <summary>
+    /// Parse DZRP-related command-line arguments.
+    /// Supported: --dzrp, --dzrp-port N, --dzrp-bind ADDR
+    /// </summary>
+    private void ParseDzrpArgs(string[] args)
+    {
+        if (args == null || args.Length == 0)
+            return;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            switch (args[i])
+            {
+                case "--dzrp":
+                    Settings.IsDzrpEnabled = true;
+                    Console.WriteLine("DZRP: Enabled via command line");
+                    break;
+
+                case "--dzrp-port" when i + 1 < args.Length && int.TryParse(args[i + 1], out var port):
+                    Settings.DzrpPort = port;
+                    Console.WriteLine($"DZRP: Port set to {port}");
+                    i++; // Skip the value
+                    break;
+
+                case "--dzrp-bind" when i + 1 < args.Length:
+                    Settings.DzrpBindAddress = args[i + 1];
+                    Console.WriteLine($"DZRP: Bind address set to {args[i + 1]}");
+                    i++; // Skip the value
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Check if an argument is a value for a preceding flag.
+    /// </summary>
+    private static bool IsArgValue(string[] args, string arg)
+    {
+        var index = Array.IndexOf(args, arg);
+        if (index <= 0)
+            return false;
+        var prev = args[index - 1];
+        return prev == "--dzrp-port" || prev == "--dzrp-bind";
     }
 }
