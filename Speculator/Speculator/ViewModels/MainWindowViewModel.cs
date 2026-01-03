@@ -26,11 +26,22 @@ namespace Speculator.ViewModels;
 
 public class MainWindowViewModel : ViewModelBase, IDisposable
 {
+    private bool m_enableDzrpOnStart;
+    private int? m_dzrpPortOverride;
+    private string m_dzrpBindOverride;
+    private bool? m_skipKeyboardHookOverride;
+
     public ZxSpectrum Speccy { get; }
     public ZxDisplay Display { get; }
     public Settings Settings => Settings.Instance;
     public MruFiles Mru { get; }
     public RomSelectorViewModel RomSelectorDetails { get; }
+
+    /// <summary>
+    /// Whether keyboard hook should be skipped (for DZRP mode).
+    /// Command-line flag overrides Settings.
+    /// </summary>
+    public bool ShouldSkipKeyboardHook => m_skipKeyboardHookOverride ?? Settings.SkipKeyboardHook;
 
     public MainWindowViewModel(string[] args = null)
     {
@@ -73,8 +84,21 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         OneShotDispatcherTimer.CreateAndStart(TimeSpan.FromSeconds(3), ShowCrtMessage);
+
+        // Start DZRP after a delay if requested via command line
+        // This avoids a crash in Avalonia's NSApplication initialization on macOS
+        if (m_enableDzrpOnStart)
+        {
+            OneShotDispatcherTimer.CreateAndStart(TimeSpan.FromSeconds(1), () =>
+            {
+                var port = m_dzrpPortOverride ?? Settings.DzrpPort;
+                var bind = m_dzrpBindOverride ?? Settings.DzrpBindAddress;
+                Speccy.EnableDzrp(port, bind);
+            });
+        }
+
         return;
-        
+
         void OnSettingsChanged(bool allowMessages)
         {
             Display.IsCrt = Settings.IsCrt;
@@ -222,7 +246,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Parse DZRP-related command-line arguments.
-    /// Supported: --dzrp, --dzrp-port N, --dzrp-bind ADDR
+    /// Supported: --dzrp, --dzrp-port N, --dzrp-bind ADDR, --no-keyboard-hook
     /// </summary>
     private void ParseDzrpArgs(string[] args)
     {
@@ -234,20 +258,34 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
             switch (args[i])
             {
                 case "--dzrp":
-                    Settings.IsDzrpEnabled = true;
-                    Console.WriteLine("DZRP: Enabled via command line");
+                    // Don't set IsDzrpEnabled here - we'll start DZRP after app init to avoid crash
+                    // Mark for delayed start and save overrides locally
+                    m_enableDzrpOnStart = true;
+                    // DZRP mode typically means remote debugging - skip keyboard hook by default
+                    m_skipKeyboardHookOverride = true;
+                    Console.WriteLine("DZRP: Enabled via command line (keyboard hook disabled)");
                     break;
 
                 case "--dzrp-port" when i + 1 < args.Length && int.TryParse(args[i + 1], out var port):
-                    Settings.DzrpPort = port;
+                    m_dzrpPortOverride = port;
                     Console.WriteLine($"DZRP: Port set to {port}");
                     i++; // Skip the value
                     break;
 
                 case "--dzrp-bind" when i + 1 < args.Length:
-                    Settings.DzrpBindAddress = args[i + 1];
+                    m_dzrpBindOverride = args[i + 1];
                     Console.WriteLine($"DZRP: Bind address set to {args[i + 1]}");
                     i++; // Skip the value
+                    break;
+
+                case "--no-keyboard-hook":
+                    m_skipKeyboardHookOverride = true;
+                    Console.WriteLine("Keyboard hook disabled");
+                    break;
+
+                case "--with-keyboard-hook":
+                    m_skipKeyboardHookOverride = false;
+                    Console.WriteLine("Keyboard hook enabled");
                     break;
             }
         }

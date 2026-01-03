@@ -46,7 +46,14 @@ public abstract class UserSettingsBase : INotifyPropertyChanged, IDisposable
             value = new FileInfo(s);
             m_state[key] = value;
         }
-        
+
+        // Handle JSON numeric type conversion (JSON.NET deserializes integers as Int64)
+        if (value != null && typeof(T).IsPrimitive && value.GetType() != typeof(T))
+        {
+            value = Convert.ChangeType(value, typeof(T));
+            m_state[key] = value;
+        }
+
         return (T)value;
     }
 

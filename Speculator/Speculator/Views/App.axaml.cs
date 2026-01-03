@@ -49,7 +49,9 @@ public partial class App : Application
 
             if (!Design.IsDesignMode)
             {
-                viewModel.Speccy.PortHandler.StartKeyboardHook();
+                // Skip keyboard hook if requested (e.g., DZRP mode on macOS)
+                if (!viewModel.ShouldSkipKeyboardHook)
+                    viewModel.Speccy.PortHandler.StartKeyboardHook();
                 viewModel.Speccy.PowerOnAsync();
 
                 desktop.MainWindow.Closed += (_, _) => Settings.Instance.Dispose();

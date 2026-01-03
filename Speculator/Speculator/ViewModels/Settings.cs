@@ -32,6 +32,7 @@ public class Settings : UserSettingsBase
         IsDzrpEnabled = false;
         DzrpPort = 11000;
         DzrpBindAddress = "127.0.0.1";
+        SkipKeyboardHook = false;
     }
     
     public bool IsCrt
@@ -119,6 +120,16 @@ public class Settings : UserSettingsBase
     public string DzrpBindAddress
     {
         get => Get<string>();
+        set => Set(value);
+    }
+
+    /// <summary>
+    /// Skip global keyboard hook (for DZRP mode on macOS).
+    /// When true, keyboard input is disabled. Useful for headless/remote debugging.
+    /// </summary>
+    public bool SkipKeyboardHook
+    {
+        get => Get<bool>();
         set => Set(value);
     }
 }
