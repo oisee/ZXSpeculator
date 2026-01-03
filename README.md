@@ -95,21 +95,48 @@ The project is provided as C# source code:
 
 DZRP enables VS Code debugging of Z80 programs running in the emulator.
 
-### Command-Line Options
+### Building the Binary
 
 ```bash
-# Enable DZRP for local debugging
-./ZXSpeculator --dzrp
+# Clone and build
+git clone https://github.com/deanthecoder/ZXSpeculator.git
+cd ZXSpeculator/Speculator
 
-# Enable DZRP for remote access (from other machines)
-./ZXSpeculator --dzrp --dzrp-bind 0.0.0.0
+# Option 1: Run directly from source
+dotnet run --project Speculator -- --dzrp --dzrp-bind 0.0.0.0
 
-# Custom port
-./ZXSpeculator --dzrp --dzrp-port 12000
+# Option 2: Build self-contained binary (recommended for deployment)
+dotnet publish Speculator -c Release -r osx-arm64 --self-contained -o publish
 
-# Full example: remote access on custom port
-./ZXSpeculator --dzrp --dzrp-bind 0.0.0.0 --dzrp-port 11000
+# Binary location after publish:
+# ./Speculator/publish/Speculator
 ```
+
+### Running with DZRP
+
+```bash
+# From the publish directory
+cd Speculator/publish
+
+# Enable DZRP for local debugging (127.0.0.1:11000)
+./Speculator --dzrp
+
+# Enable DZRP for remote access (0.0.0.0:11000)
+./Speculator --dzrp --dzrp-bind 0.0.0.0
+
+# Or use the helper script
+./run-dzrp.sh --remote
+```
+
+### Command-Line Flags
+
+| Flag | Description |
+|------|-------------|
+| `--dzrp` | Enable DZRP server (default: port 11000, local only) |
+| `--dzrp-bind <addr>` | Bind address: `127.0.0.1` (local) or `0.0.0.0` (remote) |
+| `--dzrp-port <port>` | Custom port (default: 11000) |
+| `--no-keyboard-hook` | Disable keyboard hooks (auto-enabled with --dzrp) |
+| `--with-keyboard-hook` | Force enable keyboard hooks even in DZRP mode |
 
 ### Remote Development with mzrun
 
@@ -117,7 +144,8 @@ Run the emulator on a machine with a display, debug from anywhere:
 
 ```bash
 # On macOS (with display)
-./ZXSpeculator --dzrp --dzrp-bind 0.0.0.0
+cd Speculator/publish
+./Speculator --dzrp --dzrp-bind 0.0.0.0
 
 # From dev machine (Linux, Windows, etc.)
 ./mzrun --host mac-host.local program.minz
@@ -125,7 +153,7 @@ Run the emulator on a machine with a display, debug from anywhere:
 
 ### Quick Start (VS Code + DeZog)
 
-1. **Start emulator**: `./ZXSpeculator --dzrp`
+1. **Start emulator**: `./Speculator --dzrp`
 2. **Install DeZog** in VS Code: `code --install-extension maziac.dezog`
 3. **Create `.vscode/launch.json`**:
 ```json
