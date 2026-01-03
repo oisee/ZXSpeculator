@@ -1,4 +1,3 @@
-[![Twitter URL](https://img.shields.io/twitter/url/https/twitter.com/deanthecoder.svg?style=social&label=Follow%20%40deanthecoder)](https://twitter.com/deanthecoder)
 # ZX Speculator
 ZX Speculator is a cross-platform ZX Spectrum 48K emulator written in C#.
 ![Main UI](img/MainUI.png?raw=true "Main UI")
