@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ZX Speculator is a cross-platform ZX Spectrum 48K emulator written in C#, using Avalonia for the UI. It emulates the Z80 CPU, ULA display, sound via OpenAL, and supports various file formats (.z80, .sna, .tap, .scr, .bin).
 
+**This fork** adds DZRP (DeZog Remote Protocol) support for external debugging via VS Code, enabling .minz language development.
+
 ## Build and Run Commands
 
 ```bash
@@ -45,6 +47,15 @@ dotnet test Speculator/UnitTests/UnitTests.csproj --filter "Name=TestRunner"
 - `ZxPortHandler.cs` - I/O port handling (keyboard, sound, tape)
 - `ZxFileIo.cs` - File format loading/saving (.z80, .sna, .tap, etc.)
 
+### DZRP Components (Dzrp/)
+
+- `DzrpServer.cs` - TCP server on port 11000, manages client connections
+- `DzrpSession.cs` - Per-client protocol handler
+- `DzrpDebugBridge.cs` - Bridges DZRP commands to CPU/memory/registers
+- `DzrpBreakpoint.cs` - DZRP-managed breakpoints with unique IDs
+- `DzrpMessage.cs` - Message serialization (little-endian)
+- `DzrpCommands.cs` - Protocol constants
+
 ### Emulation Flow
 
 1. `ZxSpectrum` creates `CPU` with `Memory` and `ZxPortHandler`
@@ -55,12 +66,13 @@ dotnet test Speculator/UnitTests/UnitTests.csproj --filter "Name=TestRunner"
 
 ## Conventions
 
-- **Target Framework**: .NET 7.0
+- **Target Framework**: .NET 8.0
 - **Nullable**: Disabled project-wide
 - **UI Framework**: Avalonia 11.x with Material Design
 - **Testing**: NUnit with NSubstitute for mocking
 - **English**: American English for identifiers and comments
 - **License Header**: All source files include the author's copyright header
+- **DZRP Thread Safety**: Use `CPU.CpuStepLock` when accessing registers/memory from DZRP
 
 ## Test Suites
 

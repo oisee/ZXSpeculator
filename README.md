@@ -3,7 +3,29 @@
 ZX Speculator is a cross-platform ZX Spectrum 48K emulator written in C#.
 ![Main UI](img/MainUI.png?raw=true "Main UI")
 
+---
+
+## About This Fork
+
+This fork extends ZX Speculator with **DZRP (DeZog Remote Protocol)** support to enable external debugging via VS Code. The primary goal is to support development of the **.minz programming language** - a modern language that compiles to Z80 machine code.
+
+### Why This Fork?
+
+- **External Debugging**: Control the emulator from VS Code using the [DeZog extension](https://marketplace.visualstudio.com/items?itemName=maziac.dezog)
+- **.minz Language Support**: Provides the runtime environment for debugging .minz programs
+- **SDK Integration**: Enables building custom development tools via the DZRP protocol
+- **Accurate Emulation**: Leverages ZX Speculator's proven Z80 accuracy (passes ZEXALL/FUSE tests)
+
+### Documentation
+
+- [DZRP Purpose & .minz Integration](reports/2026-01-03-002-dzrp-purpose-and-minz-integration.md) - Why DZRP was implemented
+- [SDK/IDE Integration Guide](reports/2026-01-03-003-sdk-ide-integration-guide.md) - How to integrate with your tools
+- [DZRP Implementation Plan](reports/2026-01-03-001-dzrp-implementation-plan.md) - Technical details
+
+---
+
 ## Features
+- **DZRP Support** *(This Fork)*: External debugging via VS Code's [DeZog extension](https://marketplace.visualstudio.com/items?itemName=maziac.dezog). Control execution, set breakpoints, inspect registers and memory.
 - **Cross Platform**: Built using [Avalonia](https://avaloniaui.net/), ensuring compatibility across various platforms.
 - **Key Mapping**: Most keys on a modern PC keyboard are automatically mapped to the Spectrum, making it much easier to type in code.
 - **File Format Support**: Compatible with .z80, .bin, .scr, .tap, and .sna files.
@@ -68,6 +90,38 @@ The project is provided as C# source code:
 1. Clone the repository from GitHub.
 2. Open the solution (`Speculator.sln`) in your preferred IDE.
 3. Build and run the application.
+
+## Using DZRP (External Debugging)
+
+DZRP enables VS Code debugging of Z80 programs running in the emulator.
+
+### Quick Start
+
+1. **Enable DZRP** in ZX Speculator (set `IsDzrpEnabled = true` in settings)
+2. **Install DeZog** in VS Code: `code --install-extension maziac.dezog`
+3. **Create `.vscode/launch.json`**:
+```json
+{
+  "version": "0.2.0",
+  "configurations": [{
+    "type": "dezog",
+    "request": "launch",
+    "name": "ZX Speculator",
+    "remoteType": "dzrp",
+    "dzrp": { "hostname": "localhost", "port": 11000 },
+    "listFiles": [{ "path": "build/program.lst", "asm": "sjasmplus" }]
+  }]
+}
+```
+4. **Start debugging** with F5 in VS Code
+
+### Supported Commands
+- Pause/Continue execution
+- Set breakpoints
+- Read/write registers and memory
+- Step through code
+
+See the [SDK/IDE Integration Guide](reports/2026-01-03-003-sdk-ide-integration-guide.md) for detailed examples.
 
 ## Videos
 There's a [YouTube playlist](https://www.youtube.com/playlist?list=PLPA1ndSnAZTwt7cQjDNwwsPjS89Dd3yqv) showing some classic games played in the emulator.
