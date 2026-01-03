@@ -96,7 +96,15 @@ public class ZxSpectrum : ViewModelBase, IDisposable
     /// <param name="bindAddress">Bind address: "127.0.0.1" (local only) or "0.0.0.0" (remote access)</param>
     public void EnableDzrp(int port = DzrpServer.DefaultPort, string bindAddress = DzrpServer.DefaultBindAddress)
     {
-        m_dzrpServer ??= new DzrpServer(TheCpu, port, bindAddress);
+        if (m_dzrpServer == null)
+        {
+            m_dzrpServer = new DzrpServer(TheCpu, port, bindAddress);
+
+            // Forward DZRP events for UI layer to handle (needs UI thread dispatching)
+            m_dzrpServer.ExecutionPaused += (_, args) => DzrpExecutionPaused?.Invoke(this, args);
+            m_dzrpServer.ExecutionContinued += (_, _) => DzrpExecutionContinued?.Invoke(this, EventArgs.Empty);
+        }
+
         m_dzrpServer.Start();
     }
 
@@ -117,6 +125,22 @@ public class ZxSpectrum : ViewModelBase, IDisposable
     /// Returns true if a DZRP client (DeZog) is connected.
     /// </summary>
     public bool IsDzrpClientConnected => m_dzrpServer?.IsClientConnected ?? false;
+
+    /// <summary>
+    /// Force a screen refresh from current memory state.
+    /// Useful when DZRP modifies memory while paused.
+    /// </summary>
+    public void RefreshScreen() => TheDisplay.ForceRender(TheCpu.MainMemory);
+
+    /// <summary>
+    /// Fired when DZRP pauses execution. UI layer should handle on UI thread.
+    /// </summary>
+    public event EventHandler<PauseEventArgs> DzrpExecutionPaused;
+
+    /// <summary>
+    /// Fired when DZRP continues execution. UI layer should handle on UI thread.
+    /// </summary>
+    public event EventHandler DzrpExecutionContinued;
 
     public void Dispose()
     {

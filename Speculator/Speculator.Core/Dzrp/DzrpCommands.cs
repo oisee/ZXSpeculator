@@ -27,6 +27,7 @@ public static class DzrpCommands
     public const byte CMD_READ_MEM = 8;
     public const byte CMD_WRITE_MEM = 9;
     public const byte CMD_SET_SLOT = 10;
+    public const byte CMD_STEP_INTO = 17;
 
     // Breakpoint commands
     public const byte CMD_ADD_BREAKPOINT = 40;

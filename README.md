@@ -135,6 +135,8 @@ cd Speculator/publish
 | `--dzrp` | Enable DZRP server (default: port 11000, local only) |
 | `--dzrp-bind <addr>` | Bind address: `127.0.0.1` (local) or `0.0.0.0` (remote) |
 | `--dzrp-port <port>` | Custom port (default: 11000) |
+| `--debugger` | Open debugger view on startup |
+| `--trace` | Enable DZRP protocol tracing (prints all commands/responses) |
 | `--no-keyboard-hook` | Disable keyboard hooks (auto-enabled with --dzrp) |
 | `--with-keyboard-hook` | Force enable keyboard hooks even in DZRP mode |
 

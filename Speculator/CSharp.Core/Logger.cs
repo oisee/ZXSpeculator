@@ -16,7 +16,8 @@ namespace CSharp.Core;
 
 public class Logger
 {
-    private readonly FileInfo m_filePath = Assembly.GetEntryAssembly().GetAppSettingsPath().GetFile("log.txt");
+    private readonly FileInfo m_filePath = Assembly.GetEntryAssembly().GetAppSettingsPath()
+        .GetFile($"log-{DateTime.Now:yyyyMMdd-HHmmss}.txt");
     public enum Severity
     {
         Info,
@@ -30,10 +31,18 @@ public class Logger
 
     private Logger()
     {
+        // Clean up old log files (keep last 5)
         try
         {
-            if (m_filePath.Exists)
-                m_filePath.TryDelete();
+            var logDir = m_filePath.Directory;
+            if (logDir?.Exists == true)
+            {
+                var oldLogs = logDir.GetFiles("log-*.txt")
+                    .OrderByDescending(f => f.CreationTime)
+                    .Skip(5);
+                foreach (var oldLog in oldLogs)
+                    oldLog.TryDelete();
+            }
         }
         catch (Exception)
         {

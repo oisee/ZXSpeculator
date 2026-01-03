@@ -161,6 +161,32 @@ public class Debugger : ViewModelBase
             m_propertyEventRaiser.Invoke();
     }
 
+    // Register wrapper properties for UI binding (Registers doesn't implement INotifyPropertyChanged)
+    public ushort RegPC => TheCpu.TheRegisters.PC;
+    public ushort RegSP => TheCpu.TheRegisters.SP;
+    public ushort RegAF => TheCpu.TheRegisters.Main.AF;
+    public ushort RegBC => TheCpu.TheRegisters.Main.BC;
+    public ushort RegDE => TheCpu.TheRegisters.Main.DE;
+    public ushort RegHL => TheCpu.TheRegisters.Main.HL;
+    public ushort RegIX => TheCpu.TheRegisters.IX;
+    public ushort RegIY => TheCpu.TheRegisters.IY;
+    public ushort RegAF2 => TheCpu.TheRegisters.Alt.AF;
+    public ushort RegBC2 => TheCpu.TheRegisters.Alt.BC;
+    public ushort RegDE2 => TheCpu.TheRegisters.Alt.DE;
+    public ushort RegHL2 => TheCpu.TheRegisters.Alt.HL;
+    public byte RegI => TheCpu.TheRegisters.I;
+    public byte RegR => TheCpu.TheRegisters.R;
+    public bool FlagS => TheCpu.TheRegisters.SignFlag;
+    public bool FlagZ => TheCpu.TheRegisters.ZeroFlag;
+    public bool Flag5 => TheCpu.TheRegisters.Flag5;
+    public bool FlagH => TheCpu.TheRegisters.HalfCarryFlag;
+    public bool Flag3 => TheCpu.TheRegisters.Flag3;
+    public bool FlagP => TheCpu.TheRegisters.ParityFlag;
+    public bool FlagN => TheCpu.TheRegisters.SubtractFlag;
+    public bool FlagC => TheCpu.TheRegisters.CarryFlag;
+    public bool IFF1 => TheCpu.TheRegisters.IFF1;
+    public bool IFF2 => TheCpu.TheRegisters.IFF2;
+
     /// <summary>
     /// Multi-line disassembly, starting at [PC].
     /// </summary>
@@ -186,6 +212,12 @@ public class Debugger : ViewModelBase
 
     public void StartDebugging() => IsStepping = true;
     public void StopDebugging() => IsStepping = false;
+
+    /// <summary>
+    /// Force UI refresh of all properties (registers, disassembly, etc.)
+    /// Call this after external changes (e.g., DZRP stepping).
+    /// </summary>
+    public void RefreshUi() => RaiseAllPropertiesChanged();
     public void Show() => IsVisible = true;
     public void Hide() => IsVisible = false;
 

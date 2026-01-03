@@ -30,6 +30,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
     private int? m_dzrpPortOverride;
     private string m_dzrpBindOverride;
     private bool? m_skipKeyboardHookOverride;
+    private bool m_showDebuggerOnStart;
 
     public ZxSpectrum Speccy { get; }
     public ZxDisplay Display { get; }
@@ -55,6 +56,19 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
         };
 
         Speccy.CpuHistory.Activated += (_, _) => Speccy.EmulationSpeed = ClockSync.Speed.Actual;
+
+        // Handle DZRP execution events on UI thread for proper debugger UI updates
+        Speccy.DzrpExecutionPaused += (_, _) => Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            Speccy.TheDebugger.StartDebugging();
+            Speccy.TheDebugger.Show();
+            Speccy.TheDebugger.RefreshUi();
+            Speccy.RefreshScreen();
+        });
+        Speccy.DzrpExecutionContinued += (_, _) => Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            Speccy.TheDebugger.StopDebugging();
+        });
 
         Mru = new MruFiles().InitFromString(Settings.MruFiles);
         Mru.OpenRequested += (_, file) => Speccy.LoadRom(file);
@@ -94,6 +108,15 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
                 var port = m_dzrpPortOverride ?? Settings.DzrpPort;
                 var bind = m_dzrpBindOverride ?? Settings.DzrpBindAddress;
                 Speccy.EnableDzrp(port, bind);
+            });
+        }
+
+        // Show debugger view on startup if requested
+        if (m_showDebuggerOnStart)
+        {
+            OneShotDispatcherTimer.CreateAndStart(TimeSpan.FromSeconds(1), () =>
+            {
+                Speccy.TheDebugger.Show();
             });
         }
 
@@ -286,6 +309,16 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
                 case "--with-keyboard-hook":
                     m_skipKeyboardHookOverride = false;
                     Console.WriteLine("Keyboard hook enabled");
+                    break;
+
+                case "--debugger":
+                    m_showDebuggerOnStart = true;
+                    Console.WriteLine("Debugger view will open on startup");
+                    break;
+
+                case "--trace":
+                    Speculator.Core.Dzrp.DzrpSession.TraceEnabled = true;
+                    Console.WriteLine("DZRP trace mode enabled");
                     break;
             }
         }

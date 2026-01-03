@@ -184,6 +184,18 @@ public class ZxDisplay : ViewModelBase
         return invert ? (paperIndex, penIndex) : (penIndex, paperIndex);
     }
     
+    /// <summary>
+    /// Force a full screen render from current memory state.
+    /// Used when DZRP pauses to update display without running CPU.
+    /// </summary>
+    public void ForceRender(Memory memory)
+    {
+        const int scanlineCount = 312;
+        for (var i = 0; i < scanlineCount; i++)
+            RenderScanlineIntoBuffer(memory, i, m_screenBuffer, BorderAttr, m_isFlashing, ref m_didPixelsChange);
+        UpdateScreen();
+    }
+
     public void OnRenderScanline(object sender, (Memory memory, int scanline) args)
     {
         var didReachScreenBottom = RenderScanlineIntoBuffer(args.memory, args.scanline, m_screenBuffer, BorderAttr, m_isFlashing, ref m_didPixelsChange);

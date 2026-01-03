@@ -28,6 +28,11 @@ public class DzrpSession : IDisposable
     private readonly object m_streamLock = new();
     private volatile bool m_isRunning;
 
+    /// <summary>
+    /// Enable trace logging of all DZRP commands and responses.
+    /// </summary>
+    public static bool TraceEnabled { get; set; }
+
     public event EventHandler Disconnected;
 
     public DzrpSession(TcpClient client, IDzrpDebugBridge bridge)
@@ -123,8 +128,38 @@ public class DzrpSession : IDisposable
         }
     }
 
+    private static string GetCommandName(byte cmdId) => cmdId switch
+    {
+        DzrpCommands.CMD_INIT => "CMD_INIT",
+        DzrpCommands.CMD_CLOSE => "CMD_CLOSE",
+        DzrpCommands.CMD_GET_REGISTERS => "CMD_GET_REGISTERS",
+        DzrpCommands.CMD_SET_REGISTER => "CMD_SET_REGISTER",
+        DzrpCommands.CMD_WRITE_BANK => "CMD_WRITE_BANK",
+        DzrpCommands.CMD_CONTINUE => "CMD_CONTINUE",
+        DzrpCommands.CMD_PAUSE => "CMD_PAUSE",
+        DzrpCommands.CMD_READ_MEM => "CMD_READ_MEM",
+        DzrpCommands.CMD_WRITE_MEM => "CMD_WRITE_MEM",
+        DzrpCommands.CMD_SET_SLOT => "CMD_SET_SLOT",
+        DzrpCommands.CMD_STEP_INTO => "CMD_STEP_INTO",
+        DzrpCommands.CMD_ADD_BREAKPOINT => "CMD_ADD_BREAKPOINT",
+        DzrpCommands.CMD_REMOVE_BREAKPOINT => "CMD_REMOVE_BREAKPOINT",
+        _ => $"UNKNOWN({cmdId})"
+    };
+
+    private static void Trace(string message)
+    {
+        if (!TraceEnabled) return;
+        Console.ForegroundColor = ConsoleColor.DarkCyan;
+        Console.Write("[DZRP] ");
+        Console.ResetColor();
+        Console.WriteLine(message);
+    }
+
     private void ProcessMessage(DzrpMessage msg)
     {
+        if (TraceEnabled)
+            Trace($"<-- Recv: seq={msg.SequenceNumber} {GetCommandName(msg.CommandId)} payload={msg.Payload.Length} bytes");
+
         switch (msg.CommandId)
         {
             case DzrpCommands.CMD_INIT:
@@ -156,6 +191,9 @@ public class DzrpSession : IDisposable
                 break;
             case DzrpCommands.CMD_REMOVE_BREAKPOINT:
                 HandleRemoveBreakpoint(msg);
+                break;
+            case DzrpCommands.CMD_STEP_INTO:
+                HandleStepInto(msg);
                 break;
             default:
                 // Unknown command - send error response
@@ -265,6 +303,13 @@ public class DzrpSession : IDisposable
         SendResponse(msg.SequenceNumber, DzrpCommands.CMD_REMOVE_BREAKPOINT, 0);
     }
 
+    private void HandleStepInto(DzrpMessage msg)
+    {
+        // Send response first, then step (notification will follow)
+        SendResponse(msg.SequenceNumber, DzrpCommands.CMD_STEP_INTO, 0);
+        m_bridge.StepInto();
+    }
+
     private void OnBridgePaused(object sender, PauseEventArgs e)
     {
         // Send NTF_PAUSE notification
@@ -279,6 +324,9 @@ public class DzrpSession : IDisposable
 
     private void SendResponse(byte seqNum, byte cmdId, params byte[] payload)
     {
+        if (TraceEnabled)
+            Trace($"--> Resp: seq={seqNum} {GetCommandName(cmdId)} payload={payload.Length} bytes");
+
         var response = DzrpMessage.CreateResponse(seqNum, cmdId, payload);
         lock (m_streamLock)
         {
@@ -295,6 +343,14 @@ public class DzrpSession : IDisposable
 
     private void SendNotification(byte notifId, byte[] payload)
     {
+        var notifName = notifId == DzrpCommands.NTF_PAUSE ? "NTF_PAUSE" : $"NTF_{notifId}";
+        if (TraceEnabled)
+        {
+            var reason = payload.Length > 0 ? (PauseReason)payload[0] : PauseReason.OtherReason;
+            var addr = payload.Length >= 3 ? (ushort)(payload[1] | (payload[2] << 8)) : (ushort)0;
+            Trace($"--> Notif: {notifName} reason={reason} PC=${addr:X4}");
+        }
+
         var notification = DzrpMessage.CreateNotification(notifId, payload);
         lock (m_streamLock)
         {

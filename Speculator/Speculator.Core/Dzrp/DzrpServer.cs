@@ -38,6 +38,8 @@ public class DzrpServer : IDisposable
     public int Port => m_port;
 
     public event EventHandler<bool> ClientConnectionChanged;
+    public event EventHandler<PauseEventArgs> ExecutionPaused;
+    public event EventHandler ExecutionContinued;
 
     public DzrpServer(CPU cpu, int port = DefaultPort, string bindAddress = DefaultBindAddress)
     {
@@ -45,6 +47,10 @@ public class DzrpServer : IDisposable
         m_port = port;
         m_bindAddress = bindAddress;
         m_bridge = new DzrpDebugBridge(cpu);
+
+        // Forward bridge events
+        ((DzrpDebugBridge)m_bridge).Paused += (_, args) => ExecutionPaused?.Invoke(this, args);
+        ((DzrpDebugBridge)m_bridge).Continued += (_, _) => ExecutionContinued?.Invoke(this, EventArgs.Empty);
     }
 
     public void Start()

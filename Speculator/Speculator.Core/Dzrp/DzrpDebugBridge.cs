@@ -22,6 +22,7 @@ public class DzrpDebugBridge : IDzrpDebugBridge
     private readonly List<DzrpBreakpoint> m_tempBreakpoints = new();
 
     public event EventHandler<PauseEventArgs> Paused;
+    public event EventHandler Continued;
 
     public bool IsPaused => m_cpu.IsDebuggerActive;
 
@@ -54,12 +55,14 @@ public class DzrpDebugBridge : IDzrpDebugBridge
         }
 
         m_cpu.IsDebuggerActive = false;
+        Continued?.Invoke(this, EventArgs.Empty);
     }
 
     public void StepInto()
     {
-        // Allow one instruction to execute
+        // Allow one instruction to execute, then notify
         m_cpu.DebuggerStep();
+        Paused?.Invoke(this, new PauseEventArgs(PauseReason.ManualBreak, m_cpu.TheRegisters.PC));
     }
 
     public byte[] GetAllRegisters()
