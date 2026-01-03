@@ -29,6 +29,8 @@ public class Settings : UserSettingsBase
         IsSoundEnabled = true;
         MruFiles = string.Empty;
         UseSpeccyColors = true;
+        IsDzrpEnabled = false;
+        DzrpPort = 11000;
     }
     
     public bool IsCrt
@@ -88,6 +90,24 @@ public class Settings : UserSettingsBase
     public bool UseC64Colors
     {
         get => Get<bool>();
+        set => Set(value);
+    }
+
+    /// <summary>
+    /// Enable DZRP (DeZog Remote Protocol) server for VS Code debugging.
+    /// </summary>
+    public bool IsDzrpEnabled
+    {
+        get => Get<bool>();
+        set => Set(value);
+    }
+
+    /// <summary>
+    /// DZRP server port (default 11000).
+    /// </summary>
+    public int DzrpPort
+    {
+        get => Get<int>();
         set => Set(value);
     }
 }

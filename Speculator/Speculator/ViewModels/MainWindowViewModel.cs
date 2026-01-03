@@ -73,6 +73,12 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
             Speccy.PortHandler.EmulateCursorJoystick = Settings.EmulateCursorJoystick;
             Speccy.SoundHandler.SetEnabled(Settings.IsSoundEnabled);
 
+            // Handle DZRP (DeZog Remote Protocol) server
+            if (Settings.IsDzrpEnabled && !Speccy.IsDzrpEnabled)
+                Speccy.EnableDzrp(Settings.DzrpPort);
+            else if (!Settings.IsDzrpEnabled && Speccy.IsDzrpEnabled)
+                Speccy.DisableDzrp();
+
             if (allowMessages)
                 ShowCrtMessage();
         }

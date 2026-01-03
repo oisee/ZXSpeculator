@@ -10,6 +10,7 @@
 // THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND.
 
 using CSharp.Core.ViewModels;
+using Speculator.Core.Dzrp;
 using Speculator.Core.Tape;
 
 namespace Speculator.Core;
@@ -20,6 +21,7 @@ namespace Speculator.Core;
 public class ZxSpectrum : ViewModelBase, IDisposable
 {
     private SoundHandler m_soundHandler;
+    private DzrpServer m_dzrpServer;
     private readonly ZxFileIo m_zxFileIo;
     private ClockSync.Speed m_emulationSpeed;
 
@@ -87,8 +89,36 @@ public class ZxSpectrum : ViewModelBase, IDisposable
         TheCpu.ResetAsync();
     }
 
+    /// <summary>
+    /// Enable DZRP (DeZog Remote Protocol) server for VS Code debugging.
+    /// </summary>
+    public void EnableDzrp(int port = DzrpServer.DefaultPort)
+    {
+        m_dzrpServer ??= new DzrpServer(TheCpu, port);
+        m_dzrpServer.Start();
+    }
+
+    /// <summary>
+    /// Disable DZRP server.
+    /// </summary>
+    public void DisableDzrp()
+    {
+        m_dzrpServer?.Stop();
+    }
+
+    /// <summary>
+    /// Returns true if DZRP server is running.
+    /// </summary>
+    public bool IsDzrpEnabled => m_dzrpServer?.IsEnabled ?? false;
+
+    /// <summary>
+    /// Returns true if a DZRP client (DeZog) is connected.
+    /// </summary>
+    public bool IsDzrpClientConnected => m_dzrpServer?.IsClientConnected ?? false;
+
     public void Dispose()
     {
+        m_dzrpServer?.Dispose();
         m_soundHandler?.Dispose();
         PortHandler?.Dispose();
         TheCpu?.PowerOffAsync();
