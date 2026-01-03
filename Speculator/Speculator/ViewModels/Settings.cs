@@ -31,6 +31,7 @@ public class Settings : UserSettingsBase
         UseSpeccyColors = true;
         IsDzrpEnabled = false;
         DzrpPort = 11000;
+        DzrpBindAddress = "127.0.0.1";
     }
     
     public bool IsCrt
@@ -108,6 +109,16 @@ public class Settings : UserSettingsBase
     public int DzrpPort
     {
         get => Get<int>();
+        set => Set(value);
+    }
+
+    /// <summary>
+    /// DZRP server bind address.
+    /// Use "127.0.0.1" for local-only (secure), "0.0.0.0" for remote access.
+    /// </summary>
+    public string DzrpBindAddress
+    {
+        get => Get<string>();
         set => Set(value);
     }
 }

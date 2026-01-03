@@ -92,9 +92,11 @@ public class ZxSpectrum : ViewModelBase, IDisposable
     /// <summary>
     /// Enable DZRP (DeZog Remote Protocol) server for VS Code debugging.
     /// </summary>
-    public void EnableDzrp(int port = DzrpServer.DefaultPort)
+    /// <param name="port">TCP port (default 11000)</param>
+    /// <param name="bindAddress">Bind address: "127.0.0.1" (local only) or "0.0.0.0" (remote access)</param>
+    public void EnableDzrp(int port = DzrpServer.DefaultPort, string bindAddress = DzrpServer.DefaultBindAddress)
     {
-        m_dzrpServer ??= new DzrpServer(TheCpu, port);
+        m_dzrpServer ??= new DzrpServer(TheCpu, port, bindAddress);
         m_dzrpServer.Start();
     }
 

@@ -75,7 +75,7 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
 
             // Handle DZRP (DeZog Remote Protocol) server
             if (Settings.IsDzrpEnabled && !Speccy.IsDzrpEnabled)
-                Speccy.EnableDzrp(Settings.DzrpPort);
+                Speccy.EnableDzrp(Settings.DzrpPort, Settings.DzrpBindAddress);
             else if (!Settings.IsDzrpEnabled && Speccy.IsDzrpEnabled)
                 Speccy.DisableDzrp();
 

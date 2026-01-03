@@ -22,9 +22,11 @@ namespace Speculator.Core.Dzrp;
 public class DzrpServer : IDisposable
 {
     public const int DefaultPort = 11000;
+    public const string DefaultBindAddress = "127.0.0.1";
 
     private readonly CPU m_cpu;
     private readonly int m_port;
+    private readonly string m_bindAddress;
     private readonly IDzrpDebugBridge m_bridge;
     private TcpListener m_listener;
     private DzrpSession m_currentSession;
@@ -37,10 +39,11 @@ public class DzrpServer : IDisposable
 
     public event EventHandler<bool> ClientConnectionChanged;
 
-    public DzrpServer(CPU cpu, int port = DefaultPort)
+    public DzrpServer(CPU cpu, int port = DefaultPort, string bindAddress = DefaultBindAddress)
     {
         m_cpu = cpu;
         m_port = port;
+        m_bindAddress = bindAddress;
         m_bridge = new DzrpDebugBridge(cpu);
     }
 
@@ -51,7 +54,8 @@ public class DzrpServer : IDisposable
 
         try
         {
-            m_listener = new TcpListener(IPAddress.Any, m_port);
+            var bindIp = IPAddress.Parse(m_bindAddress);
+            m_listener = new TcpListener(bindIp, m_port);
             m_listener.Start();
             m_isRunning = true;
             IsEnabled = true;
@@ -59,7 +63,7 @@ public class DzrpServer : IDisposable
             m_acceptThread = new Thread(AcceptLoop) { Name = "DZRP Accept" };
             m_acceptThread.Start();
 
-            Logger.Instance.Info($"DZRP server started on port {m_port}");
+            Logger.Instance.Info($"DZRP server started on {m_bindAddress}:{m_port}");
         }
         catch (Exception ex)
         {
