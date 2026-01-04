@@ -75,8 +75,20 @@ Examples:
 }
 
 func init() {
-	rootCmd.Flags().StringVar(&host, "host", "localhost", "DZRP emulator host/IP")
-	rootCmd.Flags().IntVar(&port, "port", 11000, "DZRP port")
+	// Use environment variables as defaults
+	defaultHost := "localhost"
+	if envHost := os.Getenv("DZRP_HOST"); envHost != "" {
+		defaultHost = envHost
+	}
+	defaultPort := 11000
+	if envPort := os.Getenv("DZRP_PORT"); envPort != "" {
+		if p, err := fmt.Sscanf(envPort, "%d", &defaultPort); err != nil || p != 1 {
+			defaultPort = 11000
+		}
+	}
+
+	rootCmd.Flags().StringVar(&host, "host", defaultHost, "DZRP emulator host/IP (env: DZRP_HOST)")
+	rootCmd.Flags().IntVar(&port, "port", defaultPort, "DZRP port (env: DZRP_PORT)")
 	rootCmd.Flags().Uint16Var(&loadAddr, "load", 0, "Override load address (0 = use TAP address)")
 	rootCmd.Flags().Uint16Var(&startAddr, "start", 0, "Override start address (0 = same as load)")
 	rootCmd.Flags().IntVar(&timeout, "timeout", 0, "Execution timeout in seconds (0 = run forever)")

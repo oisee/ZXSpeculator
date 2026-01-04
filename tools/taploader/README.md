@@ -52,14 +52,26 @@ go build -o taploader
 
 | Flag | Description |
 |------|-------------|
-| `--host` | DZRP emulator host (default: localhost) |
-| `--port` | DZRP port (default: 11000) |
+| `--host` | DZRP emulator host (default: localhost, env: DZRP_HOST) |
+| `--port` | DZRP port (default: 11000, env: DZRP_PORT) |
 | `--load` | Override load address (0 = use TAP address) |
 | `--start` | Override start address (0 = same as load) |
 | `--timeout` | Execution timeout in seconds (0 = run forever) |
 | `--verbose` | Show detailed loading info |
 | `--debug` | Interactive step debugger |
 | `--info` | Just show TAP contents, don't load |
+
+## Environment Variables
+
+Configure once, use everywhere:
+
+```bash
+export DZRP_HOST=192.168.1.5
+export DZRP_PORT=11000
+
+# Now just run without flags
+./taploader game.tap
+```
 
 ## TAP File Format
 

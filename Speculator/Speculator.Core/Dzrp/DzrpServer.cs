@@ -19,10 +19,37 @@ namespace Speculator.Core.Dzrp;
 /// TCP server for DZRP (DeZog Remote Protocol) connections.
 /// Allows VS Code's DeZog extension to debug Z80 programs.
 /// </summary>
+/// <remarks>
+/// Supports environment variables for configuration:
+/// - DZRP_PORT: Override default port (11000)
+/// - DZRP_HOST: Override default bind address (127.0.0.1)
+/// </remarks>
 public class DzrpServer : IDisposable
 {
     public const int DefaultPort = 11000;
     public const string DefaultBindAddress = "127.0.0.1";
+
+    /// <summary>
+    /// Get effective default port, checking DZRP_PORT environment variable.
+    /// </summary>
+    public static int GetDefaultPort()
+    {
+        var envPort = Environment.GetEnvironmentVariable("DZRP_PORT");
+        if (!string.IsNullOrEmpty(envPort) && int.TryParse(envPort, out var port))
+            return port;
+        return DefaultPort;
+    }
+
+    /// <summary>
+    /// Get effective default bind address, checking DZRP_HOST environment variable.
+    /// </summary>
+    public static string GetDefaultBindAddress()
+    {
+        var envHost = Environment.GetEnvironmentVariable("DZRP_HOST");
+        if (!string.IsNullOrEmpty(envHost))
+            return envHost;
+        return DefaultBindAddress;
+    }
 
     private readonly CPU m_cpu;
     private readonly int m_port;

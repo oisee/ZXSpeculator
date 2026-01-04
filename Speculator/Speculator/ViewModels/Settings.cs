@@ -11,6 +11,7 @@
 
 using System.IO;
 using CSharp.Core.Settings;
+using Speculator.Core.Dzrp;
 
 namespace Speculator.ViewModels;
 
@@ -30,8 +31,9 @@ public class Settings : UserSettingsBase
         MruFiles = string.Empty;
         UseSpeccyColors = true;
         IsDzrpEnabled = false;
-        DzrpPort = 11000;
-        DzrpBindAddress = "127.0.0.1";
+        // Use environment variables as defaults if set (DZRP_PORT, DZRP_HOST)
+        DzrpPort = DzrpServer.GetDefaultPort();
+        DzrpBindAddress = DzrpServer.GetDefaultBindAddress();
         SkipKeyboardHook = false;
     }
     
@@ -106,6 +108,7 @@ public class Settings : UserSettingsBase
 
     /// <summary>
     /// DZRP server port (default 11000).
+    /// Can be overridden via DZRP_PORT environment variable.
     /// </summary>
     public int DzrpPort
     {
@@ -116,6 +119,7 @@ public class Settings : UserSettingsBase
     /// <summary>
     /// DZRP server bind address.
     /// Use "127.0.0.1" for local-only (secure), "0.0.0.0" for remote access.
+    /// Can be overridden via DZRP_HOST environment variable.
     /// </summary>
     public string DzrpBindAddress
     {

@@ -139,6 +139,29 @@ cd Speculator/publish
 | `--no-keyboard-hook` | Disable keyboard hooks (auto-enabled with --dzrp) |
 | `--with-keyboard-hook` | Force enable keyboard hooks even in DZRP mode |
 
+### Environment Variables
+
+DZRP can also be configured via environment variables, enabling consistent configuration across tools:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DZRP_HOST` | Default bind address | `127.0.0.1` |
+| `DZRP_PORT` | Default port | `11000` |
+
+Example:
+```bash
+# Configure once in your shell profile
+export DZRP_HOST=0.0.0.0
+export DZRP_PORT=11000
+
+# All tools pick up the same config
+./Speculator --dzrp           # Uses DZRP_HOST and DZRP_PORT
+./mzrun program.minz          # Connects to DZRP_HOST:DZRP_PORT
+./taploader game.tap          # Same configuration
+```
+
+Command-line flags override environment variables.
+
 ### Remote Development with mzrun
 
 Run the emulator on a machine with a display, debug from anywhere:
