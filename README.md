@@ -19,7 +19,12 @@ This fork extends ZX Speculator with **DZRP (DeZog Remote Protocol)** support to
 
 - [DZRP Purpose & .minz Integration](reports/2026-01-03-002-dzrp-purpose-and-minz-integration.md) - Why DZRP was implemented
 - [SDK/IDE Integration Guide](reports/2026-01-03-003-sdk-ide-integration-guide.md) - How to integrate with your tools
-- [DZRP Implementation Plan](reports/2026-01-03-001-dzrp-implementation-plan.md) - Technical details
+- [DZRP Implementation Guide](reports/2026-01-03-004-dzrp-implementation-guide.md) - Technical implementation details
+- [Environment Variables](reports/2026-01-06-001-dzrp-environment-variables.md) - DZRP_HOST/DZRP_PORT configuration
+
+### Tools
+
+- **[taploader](tools/taploader/)** - Instant TAP file loading via DZRP (bypasses tape emulation)
 
 ---
 
