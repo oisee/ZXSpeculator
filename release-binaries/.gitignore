@@ -1,0 +1,4 @@
+# Ignore compiled binaries (too large for git)
+osx-arm64/
+taploader/taploader-*
+!RELEASE_NOTES.md
