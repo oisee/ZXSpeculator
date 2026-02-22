@@ -85,50 +85,55 @@ The emulator will mimic either a Kempston or Cursor joystick.
 In both cases the keyboard arrow keys are used for direction control, and the backslash or backtick keys will 'fire'.
 
 ## Building From Source
-### Prerequisites
-- .NET compatible IDE, such as [JetBrains Rider](https://www.jetbrains.com/rider/) or [Visual Studio 2022](https://visualstudio.microsoft.com/vs/).
-- Basic knowledge of C# and emulation concepts.
 
-### Setup
-The project is provided as C# source code:
-1. Clone the repository from GitHub.
-2. Open the solution (`Speculator.sln`) in your preferred IDE.
-3. Build and run the application.
+### Prerequisites
+- [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- `make` (included on macOS/Linux)
+
+### Quick Start
+
+```bash
+git clone https://github.com/oisee/ZXSpeculator.git
+cd ZXSpeculator
+
+make              # Build the solution
+make run          # Build and run the emulator
+make test         # Run all tests
+make install      # Publish self-contained binary and install to ~/.local/bin/zxs
+make clean        # Remove all build artifacts
+make uninstall    # Remove the symlink from ~/.local/bin
+```
+
+After `make install`, run the emulator from anywhere:
+```bash
+zxs                          # Launch the emulator
+zxs --dzrp                   # Launch with DZRP debugging enabled
+zxs game.z80                 # Launch and load a file
+```
+
+Override the target architecture or install directory:
+```bash
+make install ARCH=osx-x64                      # Intel Mac
+make install INSTALL_DIR=/usr/local/bin         # Custom install path
+```
+
+### IDE Setup
+Alternatively, open `Speculator/Speculator.sln` in [JetBrains Rider](https://www.jetbrains.com/rider/) or [Visual Studio 2022](https://visualstudio.microsoft.com/vs/).
 
 ## Using DZRP (External Debugging)
 
 DZRP enables VS Code debugging of Z80 programs running in the emulator.
 
-### Building the Binary
-
-```bash
-# Clone and build
-git clone https://github.com/deanthecoder/ZXSpeculator.git
-cd ZXSpeculator/Speculator
-
-# Option 1: Run directly from source
-dotnet run --project Speculator -- --dzrp --dzrp-bind 0.0.0.0
-
-# Option 2: Build self-contained binary (recommended for deployment)
-dotnet publish Speculator -c Release -r osx-arm64 --self-contained -o publish
-
-# Binary location after publish:
-# ./Speculator/publish/Speculator
-```
-
 ### Running with DZRP
 
 ```bash
-# From the publish directory
-cd Speculator/publish
+# Local debugging (127.0.0.1:11000)
+zxs --dzrp
 
-# Enable DZRP for local debugging (127.0.0.1:11000)
-./Speculator --dzrp
+# Remote access (0.0.0.0:11000)
+zxs --dzrp --dzrp-bind 0.0.0.0
 
-# Enable DZRP for remote access (0.0.0.0:11000)
-./Speculator --dzrp --dzrp-bind 0.0.0.0
-
-# Or use the helper script
+# Or use the helper script from the publish directory
 ./run-dzrp.sh --remote
 ```
 
