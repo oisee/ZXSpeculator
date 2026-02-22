@@ -139,15 +139,23 @@ zxs --dzrp --dzrp-bind 0.0.0.0
 
 ### Command-Line Flags
 
+Run `zxs --help` for full usage. Key flags:
+
 | Flag | Description |
 |------|-------------|
-| `--dzrp` | Enable DZRP server (default: port 11000, local only) |
+| `-h`, `--help` | Show full usage and exit |
+| `--dzrp` | Enable DZRP server on TCP socket (default: 127.0.0.1:11000) |
 | `--dzrp-bind <addr>` | Bind address: `127.0.0.1` (local) or `0.0.0.0` (remote) |
 | `--dzrp-port <port>` | Custom port (default: 11000) |
 | `--debugger` | Open debugger view on startup |
 | `--trace` | Enable DZRP protocol tracing (prints all commands/responses) |
 | `--no-keyboard-hook` | Disable keyboard hooks (auto-enabled with --dzrp) |
 | `--with-keyboard-hook` | Force enable keyboard hooks even in DZRP mode |
+| `--break-at <spec>` | Break into debugger when condition is met (see below) |
+| `--dump-frames <dir>` | Save every frame as PNG to directory |
+| `--dump-keyframes <dir>` | Save frames only when screen content changes |
+| `--frame-spec <spec>` | Frame range specification (default: all frames) |
+| `--no-border` | Capture 256x192 screen only (no border area) |
 
 ### Environment Variables
 
@@ -212,6 +220,82 @@ cd Speculator/publish
 - Step through code
 
 See the [SDK/IDE Integration Guide](reports/2026-01-03-003-sdk-ide-integration-guide.md) for detailed examples.
+
+## Automated Frame Dump
+
+Capture emulator frames as PNG files for automated testing, visual regression, animation capture, and documentation.
+
+### Basic Usage
+
+```bash
+# Capture every frame
+zxs --dump-frames /tmp/frames game.z80
+
+# Capture only frames where the screen changed (keyframes)
+zxs --dump-keyframes /tmp/kf game.sna
+
+# Capture without border (256x192 instead of 320x240)
+zxs --dump-frames /tmp/f --no-border game.z80
+```
+
+Output files are named `frame_000001.png`, `frame_000002.png`, etc. (sequential, only counting captured frames).
+
+### Frame Spec
+
+Use `--frame-spec` to capture specific frame ranges:
+
+```bash
+# Single frame
+zxs --dump-frames /tmp/f --frame-spec "100" game.z80
+
+# Range
+zxs --dump-frames /tmp/f --frame-spec "100..200" game.z80
+
+# Comma-separated mix
+zxs --dump-frames /tmp/f --frame-spec "1,50,100..200" game.z80
+
+# After file loading completes
+zxs --dump-frames /tmp/f --frame-spec "load-end..load-end+200" game.tap
+
+# T-state based
+zxs --dump-frames /tmp/f --frame-spec "T=100000..T=100000+50" game.z80
+
+# CPU state triggers
+zxs --dump-frames /tmp/f --frame-spec "PC=8000..PC=8000+100" game.z80
+```
+
+### Trigger Types
+
+These triggers work in both `--frame-spec` and `--break-at`:
+
+| Trigger | Description | Example |
+|---------|-------------|---------|
+| `PC=XXXX` | Program counter hits address (hex) | `PC=8000` |
+| `SP=XXXX` | Stack pointer equals value (hex) | `SP=FF00` |
+| `OP=XX` | Specific opcode executed (hex) | `OP=C9` (RET), `OP=FF` (RST 38h) |
+| `T=NNNNN` | T-state counter reaches value (decimal) | `T=500000` |
+| `load-start` | File loading begins | `load-start` |
+| `load-end` | File loading completes | `load-end+100` |
+
+## Conditional Debugger Break
+
+Use `--break-at` to pause execution and open the debugger when a condition is met:
+
+```bash
+# Break when PC hits address
+zxs --break-at "PC=8000" game.z80
+
+# Break at T-state count
+zxs --break-at "T=500000" game.sna
+
+# Break on specific opcode (e.g. RET)
+zxs --break-at "OP=C9" game.sna
+
+# Multiple conditions (first one wins)
+zxs --break-at "PC=8000,T=1000000" game.z80
+```
+
+Each condition fires once. When triggered, the built-in debugger opens for inspection.
 
 ## Videos
 There's a [YouTube playlist](https://www.youtube.com/playlist?list=PLPA1ndSnAZTwt7cQjDNwwsPjS89Dd3yqv) showing some classic games played in the emulator.
