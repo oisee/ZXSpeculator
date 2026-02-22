@@ -22,6 +22,8 @@ public class ZxSpectrum : ViewModelBase, IDisposable
 {
     private SoundHandler m_soundHandler;
     private DzrpServer m_dzrpServer;
+    private FrameDumper m_frameDumper;
+    private BreakAtCondition m_breakAtCondition;
     private readonly ZxFileIo m_zxFileIo;
     private ClockSync.Speed m_emulationSpeed;
 
@@ -142,8 +144,58 @@ public class ZxSpectrum : ViewModelBase, IDisposable
     /// </summary>
     public event EventHandler DzrpExecutionContinued;
 
+    /// <summary>
+    /// Enable break-at conditions that trigger the debugger when met.
+    /// </summary>
+    public void EnableBreakAt(string spec)
+    {
+        m_breakAtCondition = BreakAtCondition.Parse(spec);
+        if (!m_breakAtCondition.HasTriggers)
+            return;
+
+        TheCpu.Ticked += (sender, e) =>
+        {
+            if (m_breakAtCondition.Check(TheCpu, e.prevPC, e.currentPC))
+            {
+                TheDebugger.StartDebugging();
+                TheDebugger.Show();
+            }
+        };
+
+        Console.WriteLine($"Break-at: {spec}");
+    }
+
+    /// <summary>
+    /// Enable automated frame dumping to a directory.
+    /// </summary>
+    public void EnableFrameDump(string outputDir, string frameSpecStr, bool keyframesOnly, bool includeBorder)
+    {
+        var spec = FrameSpec.Parse(frameSpecStr);
+        m_frameDumper = new FrameDumper(outputDir, spec, keyframesOnly, includeBorder);
+
+        // Subscribe to frame completion events
+        TheDisplay.FrameCompleted += m_frameDumper.OnFrameComplete;
+
+        // Subscribe to load events if the spec has load triggers
+        if (spec.HasLoadTriggers())
+        {
+            m_zxFileIo.RomLoading += (_, _) => m_frameDumper.OnLoadStarted(TheDisplay.FrameCount);
+            m_zxFileIo.RomLoaded += (_, _) => m_frameDumper.OnLoadCompleted(TheDisplay.FrameCount);
+        }
+
+        // Subscribe to CPU ticks only if spec has PC/memory/T-state triggers
+        if (spec.HasCpuTriggers())
+            TheCpu.Ticked += m_frameDumper.OnCpuTicked;
+
+        var specDesc = string.IsNullOrEmpty(frameSpecStr) ? "all frames" : frameSpecStr;
+        var modeDesc = keyframesOnly ? "keyframes only" : "all matching";
+        var borderDesc = includeBorder ? "with border (320x240)" : "no border (256x192)";
+        Console.WriteLine($"Frame dump: {outputDir}, spec: {specDesc}, {modeDesc}, {borderDesc}");
+    }
+
     public void Dispose()
     {
+        m_frameDumper?.Dispose();
         m_dzrpServer?.Dispose();
         m_soundHandler?.Dispose();
         PortHandler?.Dispose();

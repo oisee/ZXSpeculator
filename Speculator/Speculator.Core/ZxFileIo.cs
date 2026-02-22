@@ -35,6 +35,7 @@ public class ZxFileIo
     public static string[] OpenFilters { get; } = { "*.z80", "*.bin", "*.scr", "*.sna", "*.zip", "*.tap" };
     public static string[] SaveFilters { get; } = { "*.sna" };
 
+    public event EventHandler<RomType> RomLoading;
     public event EventHandler<RomType> RomLoaded;
 
     public ZxFileIo(CPU cpu, ZxDisplay zxDisplay, TapeLoader tapeLoader)
@@ -60,6 +61,7 @@ public class ZxFileIo
 
         lock (m_cpu.CpuStepLock)
         {
+            RomLoading?.Invoke(this, RomType.Game);
             LoadFileInternal(fileInfo);
             RomLoaded?.Invoke(this, RomType.Game);
         }

@@ -42,6 +42,7 @@
         <KeyBinding Command="{Binding QuickRollback}" Gesture="F1" />
     </Window.KeyBindings>
 
+    <!-- TODO: Move menu to native macOS menu bar using Avalonia's NativeMenu API -->
     <dialogHostAvalonia:DialogHost x:Name="Host" OverlayBackground="Black">
         <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,*">
             <Grid ColumnDefinitions="*,Auto,Auto,Auto">

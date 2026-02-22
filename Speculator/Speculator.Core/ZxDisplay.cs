@@ -72,7 +72,7 @@ public class ZxDisplay : ViewModelBase
     /// </summary>
     private bool m_didPixelsChange;
     
-    private static readonly Vector3[] Colors =
+    internal static readonly Vector3[] Colors =
     {
         new Vector3(0x00, 0x00, 0x00), // Black
         new Vector3(0x00, 0x00, 0xCD), // Blue
@@ -162,6 +162,16 @@ public class ZxDisplay : ViewModelBase
 
     public event EventHandler Refreshed;
 
+    /// <summary>
+    /// Incremented each time the screen reaches the bottom (one per frame).
+    /// </summary>
+    public long FrameCount { get; private set; }
+
+    /// <summary>
+    /// Fired at the bottom of each frame with capture data.
+    /// </summary>
+    public event EventHandler<FrameCompleteEventArgs> FrameCompleted;
+
     public ZxDisplay()
     {
         m_grain = new Vector3[m_screenBuffer.Length][];
@@ -203,7 +213,10 @@ public class ZxDisplay : ViewModelBase
         // If scanline reached the bottom of the screen, update the UI.
         if (!didReachScreenBottom)
             return;
-        
+
+        FrameCount++;
+        FrameCompleted?.Invoke(this, new FrameCompleteEventArgs(args.memory, BorderAttr, m_didPixelsChange, FrameCount));
+
         // Update the flash.
         if (m_flashFrameCount++ == FramesPerFlash)
         {
@@ -436,4 +449,74 @@ public class ZxDisplay : ViewModelBase
     /// </remarks>
     private static WriteableBitmap CreateWriteableBitmap(bool expandForFx) =>
         new WriteableBitmap(new PixelSize((LeftMargin + WriteableWidth + RightMargin) * (expandForFx ? 3 : 1), (TopMargin + WritableHeight + BottomMargin) * (expandForFx ? 4 : 1)), new Vector(96, 96), PixelFormat.Rgba8888);
+
+    /// <summary>
+    /// Render the ZX Spectrum screen memory to raw RGBA pixel data without Avalonia bitmap dependency.
+    /// </summary>
+    /// <param name="memory">ZX Spectrum memory.</param>
+    /// <param name="borderAttr">Border color attribute.</param>
+    /// <param name="includeBorder">If true, render 320x240 with border; if false, 256x192 screen only.</param>
+    /// <returns>RGBA byte array (4 bytes per pixel).</returns>
+    public static byte[] RenderScreenToPixels(Memory memory, byte borderAttr, bool includeBorder)
+    {
+        const int scanlineCount = 312;
+        var screenBuffer = CreateScreenBuffer();
+        for (var i = 0; i < scanlineCount; i++)
+        {
+            var unused = false;
+            RenderScanlineIntoBuffer(memory, i, screenBuffer, borderAttr, false, ref unused);
+        }
+
+        int width, height, startX, startY;
+        if (includeBorder)
+        {
+            width = LeftMargin + WriteableWidth + RightMargin;
+            height = TopMargin + WritableHeight + BottomMargin;
+            startX = 0;
+            startY = 0;
+        }
+        else
+        {
+            width = WriteableWidth;
+            height = WritableHeight;
+            startX = LeftMargin;
+            startY = TopMargin;
+        }
+
+        var pixels = new byte[width * height * 4];
+        for (var y = 0; y < height; y++)
+        {
+            var row = screenBuffer[y + startY];
+            for (var x = 0; x < width; x++)
+            {
+                var color = Colors[row[x + startX]];
+                var offset = (y * width + x) * 4;
+                pixels[offset] = (byte)color.X;     // R
+                pixels[offset + 1] = (byte)color.Y; // G
+                pixels[offset + 2] = (byte)color.Z; // B
+                pixels[offset + 3] = 0xFF;           // A
+            }
+        }
+
+        return pixels;
+    }
+}
+
+/// <summary>
+/// Event args for the FrameCompleted event.
+/// </summary>
+public class FrameCompleteEventArgs : EventArgs
+{
+    public Memory Memory { get; }
+    public byte BorderAttr { get; }
+    public bool DidPixelsChange { get; }
+    public long FrameNumber { get; }
+
+    public FrameCompleteEventArgs(Memory memory, byte borderAttr, bool didPixelsChange, long frameNumber)
+    {
+        Memory = memory;
+        BorderAttr = borderAttr;
+        DidPixelsChange = didPixelsChange;
+        FrameNumber = frameNumber;
+    }
 }
