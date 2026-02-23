@@ -24,6 +24,7 @@ public class ZxSpectrum : ViewModelBase, IDisposable
     private DzrpServer m_dzrpServer;
     private FrameDumper m_frameDumper;
     private BreakAtCondition m_breakAtCondition;
+    private bool m_forceMaxSpeed;
     private readonly ZxFileIo m_zxFileIo;
     private ClockSync.Speed m_emulationSpeed;
 
@@ -78,7 +79,7 @@ public class ZxSpectrum : ViewModelBase, IDisposable
 
     public void LoadRom(FileInfo romFile)
     {
-        EmulationSpeed = ClockSync.Speed.Actual;
+        EmulationSpeed = m_forceMaxSpeed ? ClockSync.Speed.Maximum : ClockSync.Speed.Actual;
         m_zxFileIo.LoadFile(romFile);
     }
 
@@ -168,10 +169,10 @@ public class ZxSpectrum : ViewModelBase, IDisposable
     /// <summary>
     /// Enable automated frame dumping to a directory.
     /// </summary>
-    public void EnableFrameDump(string outputDir, string frameSpecStr, bool keyframesOnly, bool includeBorder)
+    public void EnableFrameDump(string outputDir, string frameSpecStr, bool keyframesOnly, bool includeBorder, bool addTimestamps = false)
     {
         var spec = FrameSpec.Parse(frameSpecStr);
-        m_frameDumper = new FrameDumper(outputDir, spec, keyframesOnly, includeBorder);
+        m_frameDumper = new FrameDumper(outputDir, spec, keyframesOnly, includeBorder, addTimestamps);
 
         // Subscribe to frame completion events
         TheDisplay.FrameCompleted += m_frameDumper.OnFrameComplete;
@@ -191,6 +192,16 @@ public class ZxSpectrum : ViewModelBase, IDisposable
         var modeDesc = keyframesOnly ? "keyframes only" : "all matching";
         var borderDesc = includeBorder ? "with border (320x240)" : "no border (256x192)";
         Console.WriteLine($"Frame dump: {outputDir}, spec: {specDesc}, {modeDesc}, {borderDesc}");
+    }
+
+    /// <summary>
+    /// Run emulation at maximum speed, ignoring real-time throttle.
+    /// Prevents LoadRom from resetting speed to Actual.
+    /// </summary>
+    public void EnableMaxSpeed()
+    {
+        m_forceMaxSpeed = true;
+        EmulationSpeed = ClockSync.Speed.Maximum;
     }
 
     public void Dispose()

@@ -13,7 +13,7 @@ namespace Speculator.Core;
 
 /// <summary>
 /// A condition that, when met, triggers the debugger.
-/// Supports: PC=XXXX, SP=XXXX, OP=XX, T=NNNNN (all hex except T which is decimal).
+/// Supports: PC=XXXX, SP=XXXX, OP=XX, T=NNNNN (all hex except T which is decimal), DI:HALT.
 /// </summary>
 public class BreakAtCondition
 {
@@ -22,12 +22,13 @@ public class BreakAtCondition
     private readonly HashSet<byte> m_opTriggers = new HashSet<byte>();
     private readonly List<long> m_tStateTriggers = new List<long>();
     private readonly HashSet<long> m_firedTStateTriggers = new HashSet<long>();
+    private bool m_diHaltTrigger;
 
-    public bool HasTriggers => m_pcTriggers.Count > 0 || m_spTriggers.Count > 0 || m_opTriggers.Count > 0 || m_tStateTriggers.Count > 0;
+    public bool HasTriggers => m_pcTriggers.Count > 0 || m_spTriggers.Count > 0 || m_opTriggers.Count > 0 || m_tStateTriggers.Count > 0 || m_diHaltTrigger;
 
     /// <summary>
     /// Parse a --break-at spec string. Comma-separated conditions.
-    /// Examples: "PC=8000", "SP=FFFF", "OP=FF", "T=100000", "PC=8000,T=500000"
+    /// Examples: "PC=8000", "SP=FFFF", "OP=FF", "T=100000", "DI:HALT", "PC=8000,T=500000"
     /// </summary>
     public static BreakAtCondition Parse(string spec)
     {
@@ -57,6 +58,10 @@ public class BreakAtCondition
                      long.TryParse(part.Substring(2), out var tStates))
             {
                 result.m_tStateTriggers.Add(tStates);
+            }
+            else if (part.Equals("DI:HALT", StringComparison.OrdinalIgnoreCase))
+            {
+                result.m_diHaltTrigger = true;
             }
             else
             {
@@ -106,6 +111,13 @@ public class BreakAtCondition
                 Console.WriteLine($"Break: T={t} (actual: {cpu.TStatesSinceCpuStart})");
                 return true;
             }
+        }
+
+        if (m_diHaltTrigger && cpu.IsHalted && !cpu.TheRegisters.IFF1)
+        {
+            m_diHaltTrigger = false;
+            Console.WriteLine($"Break: DI:HALT at PC={prevPC:X4} (CPU halted with interrupts disabled)");
+            return true;
         }
 
         return false;

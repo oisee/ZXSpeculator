@@ -36,6 +36,8 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
     private string m_frameSpec;
     private bool m_noBorder;
     private string m_breakAt;
+    private bool m_maxSpeed;
+    private bool m_timestamp;
 
     public ZxSpectrum Speccy { get; }
     public ZxDisplay Display { get; }
@@ -131,8 +133,12 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
         {
             var keyframesOnly = m_dumpKeyframesDir != null;
             var includeBorder = !m_noBorder;
-            Speccy.EnableFrameDump(dumpDir, m_frameSpec, keyframesOnly, includeBorder);
+            Speccy.EnableFrameDump(dumpDir, m_frameSpec, keyframesOnly, includeBorder, m_timestamp);
         }
+
+        // Enable max speed if requested
+        if (m_maxSpeed)
+            Speccy.EnableMaxSpeed();
 
         // Enable break-at conditions if requested via command line
         if (m_breakAt != null)
@@ -369,6 +375,16 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
                     Console.WriteLine($"Break-at: {args[i + 1]}");
                     i++;
                     break;
+
+                case "--max-speed":
+                    m_maxSpeed = true;
+                    Console.WriteLine("Max speed: emulation throttle disabled");
+                    break;
+
+                case "--timestamp":
+                    m_timestamp = true;
+                    Console.WriteLine("Timestamp: hex microseconds in filenames");
+                    break;
             }
         }
     }
@@ -384,6 +400,7 @@ Arguments:
 
 General:
   -h, --help                   Show this help message and exit
+  --max-speed                  Disable emulation throttle (run as fast as possible)
 
 Display:
   --debugger                   Open debugger view on startup
@@ -406,12 +423,15 @@ Frame Dump:
   --dump-keyframes <DIR>       Save frames only when screen content changes
   --frame-spec <SPEC>          Frame range specification (default: all frames)
   --no-border                  Capture 256x192 screen only (no border area)
+  --timestamp                  Add hex microsecond timestamps to filenames
 
 Trigger Syntax (used in --break-at and --frame-spec):
   PC=4000                      When program counter hits address (hex)
   SP=FFFF                      When stack pointer equals value (hex)
   OP=FF                        When opcode byte is executed (hex, e.g. FF=RST 38)
   T=100000                     When T-state counter reaches value (decimal)
+  DI:HALT                      When CPU executes HALT with interrupts disabled
+                               (dead state — --break-at only)
 
 Frame Spec Syntax:
   100                          Single frame number
@@ -430,6 +450,7 @@ Examples:
   zxs --dzrp --dzrp-bind 0.0.0.0                   Start with DZRP debug server
   zxs --break-at ""PC=8000"" game.z80                Break when PC hits 0x8000
   zxs --break-at ""T=100000,OP=FF"" game.z80         Break at T-state or RST 38
+  zxs --break-at ""DI:HALT"" game.z80                 Break on stuck CPU (DI + HALT)
   zxs --dump-frames /tmp/frames game.z80            Capture every frame
   zxs --dump-keyframes /tmp/kf --no-border game.z80 Capture screen changes, no border
   zxs --dump-frames /tmp/f --frame-spec ""load-end..load-end+200"" game.tap");
