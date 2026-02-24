@@ -17,6 +17,7 @@ This fork extends ZX Speculator with **DZRP (DeZog Remote Protocol)** support to
 
 ### Documentation
 
+- [Fork Changelog & Rationale](reports/2026-02-24-001-fork-changelog.md) - Complete history of all changes since fork
 - [DZRP Purpose & .minz Integration](reports/2026-01-03-002-dzrp-purpose-and-minz-integration.md) - Why DZRP was implemented
 - [SDK/IDE Integration Guide](reports/2026-01-03-003-sdk-ide-integration-guide.md) - How to integrate with your tools
 - [DZRP Implementation Guide](reports/2026-01-03-004-dzrp-implementation-guide.md) - Technical implementation details
