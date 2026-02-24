@@ -2149,31 +2149,31 @@ public partial class CPU
             }
 
             case Z80Instructions.InstructionID.OUT_addr_C_0:
-                ThePortHandler?.Out(imm8, 0);
+                ThePortHandler?.Out((ushort)((regs.Main.B << 8) | regs.Main.C), 0);
                 return instruction.TStateCount;
             case Z80Instructions.InstructionID.OUT_addr_n_A:
-                ThePortHandler?.Out(imm8, regs.Main.A);
+                ThePortHandler?.Out((ushort)((regs.Main.A << 8) | imm8), regs.Main.A);
                 return instruction.TStateCount;
             case Z80Instructions.InstructionID.OUT_A_addr_C:
-                ThePortHandler?.Out(regs.Main.C, regs.Main.A);
+                ThePortHandler?.Out((ushort)((regs.Main.B << 8) | regs.Main.C), regs.Main.A);
                 return instruction.TStateCount;
             case Z80Instructions.InstructionID.OUT_B_addr_C:
-                ThePortHandler?.Out(regs.Main.C, regs.Main.B);
+                ThePortHandler?.Out((ushort)((regs.Main.B << 8) | regs.Main.C), regs.Main.B);
                 return instruction.TStateCount;
             case Z80Instructions.InstructionID.OUT_C_addr_C:
-                ThePortHandler?.Out(regs.Main.C, regs.Main.C);
+                ThePortHandler?.Out((ushort)((regs.Main.B << 8) | regs.Main.C), regs.Main.C);
                 return instruction.TStateCount;
             case Z80Instructions.InstructionID.OUT_D_addr_C:
-                ThePortHandler?.Out(regs.Main.C, regs.Main.D);
+                ThePortHandler?.Out((ushort)((regs.Main.B << 8) | regs.Main.C), regs.Main.D);
                 return instruction.TStateCount;
             case Z80Instructions.InstructionID.OUT_E_addr_C:
-                ThePortHandler?.Out(regs.Main.C, regs.Main.E);
+                ThePortHandler?.Out((ushort)((regs.Main.B << 8) | regs.Main.C), regs.Main.E);
                 return instruction.TStateCount;
             case Z80Instructions.InstructionID.OUT_H_addr_C:
-                ThePortHandler?.Out(regs.Main.C, regs.Main.H);
+                ThePortHandler?.Out((ushort)((regs.Main.B << 8) | regs.Main.C), regs.Main.H);
                 return instruction.TStateCount;
             case Z80Instructions.InstructionID.OUT_L_addr_C:
-                ThePortHandler?.Out(regs.Main.C, regs.Main.L);
+                ThePortHandler?.Out((ushort)((regs.Main.B << 8) | regs.Main.C), regs.Main.L);
                 return instruction.TStateCount;
 
             case Z80Instructions.InstructionID.IN_A_addr_n:
@@ -2558,7 +2558,7 @@ public partial class CPU
             {
                 regs.Main.B = TheAlu.DecAndSetFlags(regs.Main.B);
                 var hlMem = MainMemory.Peek(regs.Main.HL);
-                ThePortHandler.Out(regs.Main.C, hlMem);
+                ThePortHandler.Out((ushort)((regs.Main.B << 8) | regs.Main.C), hlMem);
                 regs.Main.HL++;
 
                 // 'Undocumented'.
@@ -2574,7 +2574,7 @@ public partial class CPU
                 // Looping version of OUTI.
                 var hlMem = MainMemory.Peek(regs.Main.HL);
                 regs.Main.B = TheAlu.DecAndSetFlags(regs.Main.B);
-                ThePortHandler.Out(regs.Main.C, hlMem);
+                ThePortHandler.Out((ushort)((regs.Main.B << 8) | regs.Main.C), hlMem);
                 regs.Main.HL++;
                 if (regs.Main.B != 0)
                     regs.PC -= 2; // Repeat.
@@ -2592,7 +2592,7 @@ public partial class CPU
             {
                 var hlMem = MainMemory.Peek(regs.Main.HL);
                 regs.Main.B = TheAlu.DecAndSetFlags(regs.Main.B);
-                ThePortHandler.Out(regs.Main.C, hlMem);
+                ThePortHandler.Out((ushort)((regs.Main.B << 8) | regs.Main.C), hlMem);
                 regs.Main.HL--;
 
                 // 'Undocumented'.
@@ -2609,7 +2609,7 @@ public partial class CPU
                 // Looping version of OUTD.
                 var hlMem = MainMemory.Peek(regs.Main.HL);
                 regs.Main.B = TheAlu.DecAndSetFlags(regs.Main.B);
-                ThePortHandler.Out(regs.Main.C, hlMem);
+                ThePortHandler.Out((ushort)((regs.Main.B << 8) | regs.Main.C), hlMem);
                 regs.Main.HL--;
                 if (regs.Main.B != 0)
                     regs.PC -= 2; // Repeat.

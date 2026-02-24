@@ -23,7 +23,7 @@ public class CpuHistory : ViewModelBase
 {
     private readonly ZxFileIo m_zxFileIo;
     private const int MaxSamples = 240;
-    private const int TicksPerSample = (int)CPU.TStatesPerSecond;
+    private const int TicksPerSample = (int)MachineProfile.DefaultCpuFreqHz;
     private readonly CompressedDataStore<long> m_snapshots = new CompressedDataStore<long>();
     private long m_ticksToNextSample;
     private int m_indexToRestore;

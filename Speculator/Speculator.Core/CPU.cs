@@ -12,6 +12,7 @@
 using System.Diagnostics;
 using CSharp.Core.Extensions;
 using CSharp.Core.ViewModels;
+using Speculator.Core.Tape;
 
 // ReSharper disable InconsistentNaming
 namespace Speculator.Core;
@@ -20,16 +21,26 @@ public partial class CPU : ViewModelBase
 {
     private readonly SoundHandler m_soundHandler;
     private Alu TheAlu { get; }
-    private IPortHandler ThePortHandler { get; }
+    private IPortHandler ThePortHandler { get; set; }
     private Thread m_cpuThread;
     private readonly AutoResetEvent m_debuggerTickEvent = new AutoResetEvent(false);
     private bool m_shutdownRequested;
     private bool m_resetRequested;
     private bool m_isDebuggerActive;
-    private int m_previousScanline;
+    private int m_previousScanline = -1;
 
-    private const int TStatesPerInterrupt = 69888;
-    public const double TStatesPerSecond = 3494400;
+    public MachineProfile Profile { get; }
+    private ContentionTable m_contentionTable;
+
+    /// <summary>
+    /// T-states per interrupt (frame). Determined by machine profile.
+    /// </summary>
+    public int TStatesPerInterrupt { get; }
+
+    /// <summary>
+    /// CPU clock frequency in Hz. Determined by machine profile.
+    /// </summary>
+    public double TStatesPerSecond { get; }
 
     public event EventHandler PoweredOff;
     public event EventHandler LoadRequested;
@@ -59,15 +70,45 @@ public partial class CPU : ViewModelBase
     public bool IsHalted { get; private set; }
     public object CpuStepLock { get; } = new object();
 
-    public CPU(Memory mainMemory, IPortHandler portHandler = null, SoundHandler soundHandler = null)
+    /// <summary>
+    /// TAP trap loader for instant tape block loading. Set by ZxFileIo when a .tap is loaded.
+    /// </summary>
+    public TapTrapLoader TapTrap { get; set; }
+
+    /// <summary>
+    /// Current T-state position within the current frame.
+    /// </summary>
+    public int FrameTState => (int)(TStatesSinceCpuStart % TStatesPerInterrupt);
+
+    public CPU(Memory mainMemory, IPortHandler portHandler = null, SoundHandler soundHandler = null, MachineProfile profile = null)
     {
         m_soundHandler = soundHandler;
         MainMemory = mainMemory;
+        Profile = profile ?? MachineProfile.ZX48K;
+        TStatesPerInterrupt = Profile.TStatesPerFrame;
+        TStatesPerSecond = Profile.CpuFreqHz;
         InstructionSet = new Z80Instructions();
         TheRegisters = new Registers();
         TheAlu = new Alu(TheRegisters);
         ThePortHandler = portHandler;
         ClockSync = new ClockSync(TStatesPerSecond, () => TStatesSinceCpuStart, () => TStatesSinceCpuStart = 0);
+    }
+
+    /// <summary>
+    /// Set the port handler after construction (needed when port handler
+    /// requires a reference back to the CPU for T-state queries).
+    /// </summary>
+    public void SetPortHandler(IPortHandler portHandler)
+    {
+        ThePortHandler = portHandler;
+    }
+
+    /// <summary>
+    /// Enable ULA contention delays for memory access in $4000-$7FFF.
+    /// </summary>
+    public void EnableContention()
+    {
+        m_contentionTable = new ContentionTable(Profile, true);
     }
 
     public void SetTStatesSinceCpuStart(long tStates)
@@ -163,22 +204,32 @@ public partial class CPU : ViewModelBase
     /// </summary>
     public void Step()
     {
+        // TAP trap: intercept ROM LD-BYTES routine for instant tape loading.
+        if (TapTrap != null && TapTrap.TryIntercept(this))
+            return;
+
         var oldIFF = TheRegisters.IFF1;
+
+        // Apply ULA contention delay if PC is in contended memory.
+        if (m_contentionTable is { IsActive: true } && TheRegisters.PC >= 0x4000 && TheRegisters.PC < 0x8000)
+            TStatesSinceCpuStart += m_contentionTable.GetDelay(FrameTState);
 
         // Execute instruction.
         var tStates = Tick();
         var ticksSinceInterrupt = (int)((TStatesSinceCpuStart % TStatesPerInterrupt) + tStates);
         TStatesSinceCpuStart += tStates;
-            
+
         // Record speaker state.
         m_soundHandler?.SampleSpeakerState(tStates);
 
-        // Screen build-up.
-        var scanline = ticksSinceInterrupt / 224;
+        // Screen build-up. Render the previous (completed) scanline so that all
+        // border color events for that scanline have been recorded before rendering.
+        var scanline = ticksSinceInterrupt / Profile.TStatesPerLine;
         if (scanline != m_previousScanline)
         {
+            if (m_previousScanline >= 0)
+                RenderScanline?.Invoke(this, (MainMemory, m_previousScanline));
             m_previousScanline = scanline;
-            RenderScanline?.Invoke(this, (MainMemory, scanline));
         }
         
         // Special case 'LOAD ""' instruction.
@@ -343,6 +394,11 @@ public partial class CPU : ViewModelBase
         TheRegisters.Flag3 = ((byte)(b + TheRegisters.Main.A)).IsBitSet(3);
         TheRegisters.Flag5 = ((byte)(b + TheRegisters.Main.A)).IsBitSet(1);
     }
+
+    /// <summary>
+    /// T-states per line, from the machine profile.
+    /// </summary>
+    public int TStatesPerLine => Profile.TStatesPerLine;
 
     public double UpTime => TStatesSinceCpuStart / TStatesPerSecond;
 }

@@ -34,6 +34,7 @@ public class ZxDisplay : ViewModelBase
     private const int WriteableWidth = 256;
     private const int WritableHeight = 192;
     private const int FramesPerFlash = 16;
+    private const int VisibleBlockCount = 40;
     private bool m_isCrt = true;
     private Vector3 m_scanlineMultiplier;
     private float m_phosphorShrink;
@@ -71,7 +72,20 @@ public class ZxDisplay : ViewModelBase
     /// Used to prevent unnecessary UI screen refreshes.
     /// </summary>
     private bool m_didPixelsChange;
-    
+
+    /// <summary>
+    /// Border color change events recorded during the current frame.
+    /// Each event stores the frame-relative T-state and the new border color (0-7).
+    /// </summary>
+    private readonly BorderEvent[] m_borderEvents = new BorderEvent[1024];
+    private int m_borderEventCount;
+    private byte m_currentBorderColor;
+
+    /// <summary>
+    /// Machine profile for timing calculations.
+    /// </summary>
+    private MachineProfile m_profile = MachineProfile.ZX48K;
+
     internal static readonly Vector3[] Colors =
     {
         new Vector3(0x00, 0x00, 0x00), // Black
@@ -91,7 +105,7 @@ public class ZxDisplay : ViewModelBase
         new Vector3(0xFF, 0xFF, 0x00), // Bright Yellow
         new Vector3(0xFF, 0xFF, 0xFF)  // Bright White
     };
-    
+
     public byte BorderAttr { get; set; }
 
     public bool IsCrt
@@ -179,11 +193,31 @@ public class ZxDisplay : ViewModelBase
             m_grain[i] = new Vector3[m_screenBuffer[0].Length];
     }
 
+    /// <summary>
+    /// Set the machine profile for timing-aware rendering.
+    /// </summary>
+    public void SetProfile(MachineProfile profile)
+    {
+        m_profile = profile;
+    }
+
+    /// <summary>
+    /// Record a border color change with its frame-relative T-state position.
+    /// Called from ZxPortHandler.Out() when the border color register is written.
+    /// </summary>
+    public void RecordBorderChange(int frameTState, byte color)
+    {
+        BorderAttr = color;
+        m_currentBorderColor = color;
+        if (m_borderEventCount < m_borderEvents.Length)
+            m_borderEvents[m_borderEventCount++] = new BorderEvent(frameTState, color);
+    }
+
     private static (byte, byte) GetColorIndices(byte attr, bool invert = false)
     {
         var paperIndex = (byte)(attr >> 3 & 0x07);
         var penIndex = (byte)(attr & 0x07);
-        
+
         var isBright = attr & 0x40;
         if (isBright != 0)
         {
@@ -193,22 +227,23 @@ public class ZxDisplay : ViewModelBase
 
         return invert ? (paperIndex, penIndex) : (penIndex, paperIndex);
     }
-    
+
     /// <summary>
     /// Force a full screen render from current memory state.
     /// Used when DZRP pauses to update display without running CPU.
     /// </summary>
     public void ForceRender(Memory memory)
     {
-        const int scanlineCount = 312;
-        for (var i = 0; i < scanlineCount; i++)
-            RenderScanlineIntoBuffer(memory, i, m_screenBuffer, BorderAttr, m_isFlashing, ref m_didPixelsChange);
+        for (var i = 0; i < m_profile.LinesPerFrame; i++)
+            RenderScanlineIntoBuffer(memory, i, m_screenBuffer, BorderAttr, m_isFlashing, ref m_didPixelsChange, m_profile.FirstScreenLine);
         UpdateScreen();
     }
 
     public void OnRenderScanline(object sender, (Memory memory, int scanline) args)
     {
-        var didReachScreenBottom = RenderScanlineIntoBuffer(args.memory, args.scanline, m_screenBuffer, BorderAttr, m_isFlashing, ref m_didPixelsChange);
+        var didReachScreenBottom = RenderScanlineIntoBuffer(
+            args.memory, args.scanline, m_screenBuffer, BorderAttr, m_isFlashing, ref m_didPixelsChange,
+            m_profile.FirstScreenLine, m_borderEvents, m_borderEventCount, m_profile.TStatesPerLine);
 
         // If scanline reached the bottom of the screen, update the UI.
         if (!didReachScreenBottom)
@@ -217,12 +252,15 @@ public class ZxDisplay : ViewModelBase
         FrameCount++;
         FrameCompleted?.Invoke(this, new FrameCompleteEventArgs(args.memory, BorderAttr, m_didPixelsChange, FrameCount));
 
+        // Reset border event buffer for the next frame.
+        m_borderEventCount = 0;
+
         // Update the flash.
         if (m_flashFrameCount++ == FramesPerFlash)
         {
             m_isFlashing = !m_isFlashing;
             m_flashFrameCount = 0;
-            
+
             // Also update the EmulationSpeed.
             var now = DateTime.Now;
             if (IsPaused)
@@ -246,21 +284,33 @@ public class ZxDisplay : ViewModelBase
     /// <summary>
     /// Returns true if the scanline has reached the bottom of the screen.
     /// </summary>
-    private static bool RenderScanlineIntoBuffer(Memory memory, int scanlineIndex, byte[][] screenBuffer, byte borderAttr, bool isFlashing, ref bool didPixelsChange)
+    private static bool RenderScanlineIntoBuffer(Memory memory, int scanlineIndex, byte[][] screenBuffer,
+        byte borderAttr, bool isFlashing, ref bool didPixelsChange,
+        int firstScreenLine = 48,
+        BorderEvent[] borderEvents = null, int borderEventCount = 0, int tStatesPerLine = 224)
     {
-        var y = scanlineIndex - (48 - TopMargin);
+        var y = scanlineIndex - (firstScreenLine - TopMargin);
         if (y < 0 || y >= screenBuffer.Length)
         {
             // Off-screen(/vsync) area.
             return false;
         }
-        
-        // Fill entire line with border color.
-        var border = GetColorIndices(borderAttr).Item1;
-        if (screenBuffer[y][0] != border)
+
+        // Fill border using per-block rendering if border events are available.
+        if (borderEvents != null && borderEventCount > 0)
         {
-            didPixelsChange = true;
-            Array.Fill(screenBuffer[y], border);
+            RenderBorderPerBlock(screenBuffer[y], scanlineIndex, borderAttr,
+                borderEvents, borderEventCount, tStatesPerLine, ref didPixelsChange);
+        }
+        else
+        {
+            // Single-color border fill (static capture path).
+            var border = GetColorIndices(borderAttr).Item1;
+            if (screenBuffer[y][0] != border)
+            {
+                didPixelsChange = true;
+                Array.Fill(screenBuffer[y], border);
+            }
         }
 
         // Set Y to the drawable screen coordinate.
@@ -270,22 +320,22 @@ public class ZxDisplay : ViewModelBase
             // In top or bottom border area - No screen content needed.
             return false;
         }
-        
+
         // Draw screen pixel content.
         var y76 = (byte)(y >> 6);
         var y210 = (byte)(y & 0x07);
         var y543 = (byte)((y >> 3) & 0x07);
-        var srcRowStart = (ushort)(0x4000 | (y76 << 11) | (y210 << 8) | (y543 << 5));
+        var srcRowOffset = (y76 << 11) | (y210 << 8) | (y543 << 5);
 
         var characterRow = y / 8;
         for (var characterColumn = 0; characterColumn < 32; characterColumn++)
         {
-            // Get block of 8 horizontal pixels.
-            var screenByte = memory.Data[srcRowStart + characterColumn]; 
+            // Get block of 8 horizontal pixels (using screen page for 128K shadow screen).
+            var screenByte = memory.GetScreenByte(srcRowOffset + characterColumn);
 
             // Get the pen/paper color for this block.
             var a = characterRow * 32 + characterColumn;
-            var attr = memory.Data[ColorMapBase + a];
+            var attr = memory.GetScreenByte(0x1800 + a);
             var isFlashSet = (attr & 0x80) != 0;
             var penAndPaper = GetColorIndices(attr, isFlashing && isFlashSet);
 
@@ -303,6 +353,65 @@ public class ZxDisplay : ViewModelBase
         }
 
         return y == WritableHeight - 1;
+    }
+
+    /// <summary>
+    /// Render border color for a scanline using per-block border events.
+    /// Each visible block (8 pixels = 4 T-states) gets the border color that was
+    /// active at its corresponding T-state position within the frame.
+    /// </summary>
+    private static void RenderBorderPerBlock(byte[] scanlineBuffer, int scanlineIndex, byte fallbackBorderAttr,
+        BorderEvent[] borderEvents, int borderEventCount, int tStatesPerLine, ref bool didPixelsChange)
+    {
+        // T-state at the start of this scanline's visible area.
+        var scanlineStartT = scanlineIndex * tStatesPerLine;
+
+        // Find the border color at the start of this scanline by scanning events.
+        // Start with the fallback (color set before any events in this frame).
+        byte currentColor = fallbackBorderAttr;
+        var eventIdx = 0;
+
+        // Advance past events that occurred before this scanline.
+        while (eventIdx < borderEventCount && borderEvents[eventIdx].TState <= scanlineStartT)
+        {
+            currentColor = borderEvents[eventIdx].Color;
+            eventIdx++;
+        }
+
+        // Check if all blocks will be the same color (common fast path).
+        var scanlineEndT = scanlineStartT + VisibleBlockCount * 4;
+        var nextEventInRange = eventIdx < borderEventCount && borderEvents[eventIdx].TState < scanlineEndT;
+
+        if (!nextEventInRange)
+        {
+            // Single color for entire scanline — same as old behavior but using event-derived color.
+            var border = GetColorIndices(currentColor).Item1;
+            if (scanlineBuffer[0] != border)
+            {
+                didPixelsChange = true;
+                Array.Fill(scanlineBuffer, border);
+            }
+            return;
+        }
+
+        // Per-block rendering: different colors within this scanline.
+        didPixelsChange = true;
+        for (var block = 0; block < VisibleBlockCount; block++)
+        {
+            var blockT = scanlineStartT + block * 4;
+
+            // Advance through events up to this block's T-state.
+            while (eventIdx < borderEventCount && borderEvents[eventIdx].TState <= blockT)
+            {
+                currentColor = borderEvents[eventIdx].Color;
+                eventIdx++;
+            }
+
+            var colorIndex = GetColorIndices(currentColor).Item1;
+            var pixelOffset = block * 8;
+            for (var p = 0; p < 8; p++)
+                scanlineBuffer[pixelOffset + p] = colorIndex;
+        }
     }
 
     /// <summary>
@@ -499,6 +608,21 @@ public class ZxDisplay : ViewModelBase
         }
 
         return pixels;
+    }
+}
+
+/// <summary>
+/// A border color change event with its frame-relative T-state position.
+/// </summary>
+internal readonly struct BorderEvent
+{
+    public readonly int TState;
+    public readonly byte Color;
+
+    public BorderEvent(int tState, byte color)
+    {
+        TState = tState;
+        Color = color;
     }
 }
 

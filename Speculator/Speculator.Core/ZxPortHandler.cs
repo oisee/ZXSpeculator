@@ -25,6 +25,8 @@ public class ZxPortHandler : ViewModelBase, IPortHandler, IDisposable
     private readonly SoundHandler m_soundHandler;
     private readonly ZxDisplay m_theDisplay;
     private readonly TapeLoader m_tapeLoader;
+    private readonly Func<int> m_getFrameTState;
+    private Memory m_memory;
     private readonly List<KeyCode> m_realKeysPressed = new List<KeyCode>();
     private readonly List<(KeyCode[] Pc, KeyCode[] Speccy)> m_pcToSpectrumKeyMap;
     private readonly List<(KeyCode[] Pc, KeyCode[] Speccy)> m_pcToSpectrumKeyMapWithJoystick;
@@ -60,11 +62,13 @@ public class ZxPortHandler : ViewModelBase, IPortHandler, IDisposable
         set => SetField(ref m_emulateCursorJoystick, value);
     }
 
-    public ZxPortHandler(SoundHandler soundHandler, ZxDisplay theDisplay, TapeLoader tapeLoader)
+    public ZxPortHandler(SoundHandler soundHandler, ZxDisplay theDisplay, TapeLoader tapeLoader, Func<int> getFrameTState = null, Memory memory = null)
     {
         m_soundHandler = soundHandler;
         m_theDisplay = theDisplay;
         m_tapeLoader = tapeLoader;
+        m_getFrameTState = getFrameTState;
+        m_memory = memory;
 
         // Map PC key to a sequence of emulated Speccy keys.
         m_pcToSpectrumKeyMap = new List<(KeyCode[], KeyCode[])>();
@@ -237,12 +241,37 @@ public class ZxPortHandler : ViewModelBase, IPortHandler, IDisposable
         }
     }
 
-    public void Out(byte port, byte b)
+    /// <summary>
+    /// Set the memory reference (needed when memory is created before the port handler).
+    /// </summary>
+    public void SetMemory(Memory memory)
     {
-        // We only care about writes to port 0xFE.
-        if (port != 0xFE)
+        m_memory = memory;
+    }
+
+    public void Out(ushort portAddress, byte b)
+    {
+        // Port $7FFD: 128K memory paging (active when bit 1=0, bit 15=0).
+        if ((portAddress & 0x8002) == 0 && m_memory is { Is128K: true })
+        {
+            if (m_memory.IsPagingLocked)
+                return;
+            var bankPage = b & 0x07;
+            var screenPage = (b & 0x08) != 0 ? 7 : 5;
+            var romPage = (b & 0x10) != 0 ? 1 : 0;
+            var lockPaging = (b & 0x20) != 0;
+            m_memory.SwitchBank(bankPage);
+            m_memory.SwitchRom(romPage);
+            m_memory.SetScreenPage(screenPage);
+            if (lockPaging)
+                m_memory.LockPaging();
             return;
-        
+        }
+
+        // We only care about writes to port 0xFE.
+        if ((portAddress & 0x00FF) != 0xFE)
+            return;
+
         // Sounds.
         var speakerState = (byte)((b & 0x18) >> 3);
         if (m_tapeSignal.HasValue)
@@ -255,7 +284,13 @@ public class ZxPortHandler : ViewModelBase, IPortHandler, IDisposable
         
         // Lower 3 bits will set the border color.
         if (m_theDisplay != null)
-            m_theDisplay.BorderAttr = (byte)(b & 0x07);
+        {
+            var color = (byte)(b & 0x07);
+            if (m_getFrameTState != null)
+                m_theDisplay.RecordBorderChange(m_getFrameTState(), color);
+            else
+                m_theDisplay.BorderAttr = color;
+        }
     }
 
     private bool IsZxKeyPressed(KeyCode key)

@@ -147,7 +147,7 @@ public class FrameDumper : IDisposable
             return;
 
         var cpu = (CPU)sender;
-        var frameNumber = cpu.TStatesSinceCpuStart / 69888;
+        var frameNumber = cpu.TStatesSinceCpuStart / cpu.TStatesPerInterrupt;
 
         // Check PC triggers
         if (m_pcTriggers.Contains(e.currentPC))

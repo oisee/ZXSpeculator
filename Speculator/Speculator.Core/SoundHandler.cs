@@ -23,7 +23,7 @@ public class SoundHandler : ViewModelBase, IDisposable
 {
     private byte m_soundLevel;
     private const int SampleHz = 11025;
-    private const double TicksPerSample = CPU.TStatesPerSecond / SampleHz;
+    private const double TicksPerSample = MachineProfile.DefaultCpuFreqHz / SampleHz;
     private double m_ticksUntilSample = TicksPerSample;
     private readonly int[] m_soundLevels = new int[4];
     private readonly SoundDevice m_soundDevice;

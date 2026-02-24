@@ -48,11 +48,17 @@ public class ZxSpectrum : ViewModelBase, IDisposable
         }
     }
 
-    public ZxSpectrum(ZxDisplay display)
+    public ZxSpectrum(ZxDisplay display, MachineProfile profile = null)
     {
         TheDisplay = display;
-        PortHandler = new ZxPortHandler(SoundHandler, TheDisplay, TheTapeLoader);
-        TheCpu = new CPU(new Memory(), PortHandler, SoundHandler);
+        var machineProfile = profile ?? MachineProfile.ZX48K;
+        TheDisplay.SetProfile(machineProfile);
+
+        // Create CPU first so we can pass its FrameTState to the port handler.
+        TheCpu = new CPU(new Memory(), null, SoundHandler, machineProfile);
+        PortHandler = new ZxPortHandler(SoundHandler, TheDisplay, TheTapeLoader, () => TheCpu.FrameTState, TheCpu.MainMemory);
+        TheCpu.SetPortHandler(PortHandler);
+
         TheTapeLoader.SetCpu(TheCpu);
         TheDebugger = new Debugger.Debugger(TheCpu);
 
@@ -67,6 +73,11 @@ public class ZxSpectrum : ViewModelBase, IDisposable
         m_zxFileIo = new ZxFileIo(TheCpu, TheDisplay, TheTapeLoader);
         CpuHistory = new CpuHistory(TheCpu, m_zxFileIo);
     }
+
+    /// <summary>
+    /// Force .tap files to use real-time signal loading instead of trap loading.
+    /// </summary>
+    public void SetTapRealtime(bool enable) => m_zxFileIo.ForceTapRealtime = enable;
 
     public void PowerOnAsync() =>
         TheCpu.PowerOnAsync();
@@ -193,6 +204,11 @@ public class ZxSpectrum : ViewModelBase, IDisposable
         var borderDesc = includeBorder ? "with border (320x240)" : "no border (256x192)";
         Console.WriteLine($"Frame dump: {outputDir}, spec: {specDesc}, {modeDesc}, {borderDesc}");
     }
+
+    /// <summary>
+    /// Enable ULA memory contention for accurate timing.
+    /// </summary>
+    public void EnableContention() => TheCpu.EnableContention();
 
     /// <summary>
     /// Run emulation at maximum speed, ignoring real-time throttle.

@@ -32,11 +32,21 @@ public class ZxFileIo
         Game
     }
 
-    public static string[] OpenFilters { get; } = { "*.z80", "*.bin", "*.scr", "*.sna", "*.zip", "*.tap" };
+    public static string[] OpenFilters { get; } = { "*.z80", "*.bin", "*.scr", "*.sna", "*.zip", "*.tap", "*.trd", "*.scl" };
     public static string[] SaveFilters { get; } = { "*.sna" };
 
     public event EventHandler<RomType> RomLoading;
     public event EventHandler<RomType> RomLoaded;
+
+    /// <summary>
+    /// The TAP trap loader, if active. Set by LoadFileInternal for .tap files.
+    /// </summary>
+    public TapTrapLoader TapTrap { get; private set; }
+
+    /// <summary>
+    /// When true, .tap files use real-time signal loading instead of trap loading.
+    /// </summary>
+    public bool ForceTapRealtime { get; set; }
 
     public ZxFileIo(CPU cpu, ZxDisplay zxDisplay, TapeLoader tapeLoader)
     {
@@ -92,7 +102,20 @@ public class ZxFileIo
                 LoadZ80(fileInfo);
                 return;
             case ".tap":
-                m_tapeLoader.Load(fileInfo);
+                if (ForceTapRealtime)
+                {
+                    m_tapeLoader.Load(fileInfo);
+                }
+                else
+                {
+                    TapTrap = TapTrapLoader.FromFile(fileInfo);
+                    m_cpu.TapTrap = TapTrap;
+                    m_tapeLoader.Load(fileInfo); // Also start signal loading as fallback.
+                }
+                return;
+            case ".trd":
+            case ".scl":
+                TrdosLoader.LoadFile(fileInfo, m_cpu);
                 return;
         }
     }
@@ -104,6 +127,9 @@ public class ZxFileIo
             case ".sna":
             case ".scr":
             case ".z80":
+            case ".tap":
+            case ".trd":
+            case ".scl":
                 return true;
             default:
                 return false;
@@ -151,7 +177,7 @@ public class ZxFileIo
         var isVersion1 = m_cpu.TheRegisters.PC != 0x0000;
         if (isVersion1)
         {
-            // Version 1.
+            // Version 1 (48K only).
             var bytesToRead = (int)(stream.Length - stream.Position);
             var data = ReadBytes(stream, bytesToRead);
             if (isDataCompressed)
@@ -166,46 +192,92 @@ public class ZxFileIo
             m_cpu.MainMemory.LoadData(data, 0x4000);
             return;
         }
-        
-        // Read the length of the extended header (2 bytes)
+
+        // Version 2/3: Read extended header.
         int extendedHeaderLength = ReadZxWord(stream);
-        if (extendedHeaderLength != 23) 
-        {
-            Logger.Instance.Warn("Unsupported or invalid Z80 file format.");
-            return;
-        }
-        
-        // Read the extended header for version 2 files.
         var extendedHeader = new byte[extendedHeaderLength];
         stream.Read(extendedHeader, 0, extendedHeaderLength);
 
         m_cpu.TheRegisters.PC = (ushort)((extendedHeader[1] << 8) + extendedHeader[0]);
-        if (!ReportHardwareMode(extendedHeader[2]))
-            return; // Unsupported Speccy.
-        
+        var hardwareMode = extendedHeader[2];
+        var is128K = hardwareMode >= 3 && hardwareMode <= 4;
+
+        if (!is128K && hardwareMode > 1)
+        {
+            // Unsupported model (SamRam, etc.).
+            ReportHardwareMode(hardwareMode);
+            return;
+        }
+
+        // For 128K files, read port $7FFD state from extended header.
+        byte port7FFD = 0;
+        if (is128K && extendedHeaderLength >= 35)
+            port7FFD = extendedHeader[35 - 32]; // Byte 35 = offset 3 from header start.
+
+        if (is128K)
+        {
+            // Initialize 128K banking if not already done by ROM.
+            if (!m_cpu.MainMemory.Is128K)
+                m_cpu.MainMemory.Init128K();
+        }
+
         // Read blocks.
         while (stream.Position < stream.Length)
         {
             var blockSize = ReadZxWord(stream);
             var pageNumber = stream.ReadByte();
 
-            var data = ReadBytes(stream, blockSize);
-            Decompress(data);
+            var isUncompressed = blockSize == 0xFFFF;
+            if (isUncompressed)
+                blockSize = 0x4000;
 
-            switch (pageNumber)
+            var data = ReadBytes(stream, blockSize);
+            if (!isUncompressed)
+                Decompress(data);
+
+            if (is128K)
             {
-                case 0: m_cpu.MainMemory.LoadData(data, 0x0000);
-                    break;
-                case 4: m_cpu.MainMemory.LoadData(data, 0x8000);
-                    break;
-                case 5: m_cpu.MainMemory.LoadData(data, 0xC000);
-                    break;
-                case 8: m_cpu.MainMemory.LoadData(data, 0x4000);
-                    break;
+                // 128K page mapping: page 3=bank 0, page 4=bank 1, ..., page 10=bank 7.
+                var bankNumber = pageNumber - 3;
+                if (bankNumber >= 0 && bankNumber <= 7)
+                {
+                    m_cpu.MainMemory.LoadBank(bankNumber, data.ToArray());
+                }
+            }
+            else
+            {
+                // 48K page mapping.
+                switch (pageNumber)
+                {
+                    case 0: m_cpu.MainMemory.LoadData(data, 0x0000);
+                        break;
+                    case 4: m_cpu.MainMemory.LoadData(data, 0x8000);
+                        break;
+                    case 5: m_cpu.MainMemory.LoadData(data, 0xC000);
+                        break;
+                    case 8: m_cpu.MainMemory.LoadData(data, 0x4000);
+                        break;
+                }
             }
         }
+
+        if (is128K)
+        {
+            // Apply port $7FFD state: select bank at $C000 and ROM.
+            var bankPage = port7FFD & 0x07;
+            var romPage = (port7FFD & 0x10) != 0 ? 1 : 0;
+            var screenPage = (port7FFD & 0x08) != 0 ? 7 : 5;
+            m_cpu.MainMemory.SwitchBank(bankPage);
+            m_cpu.MainMemory.SwitchRom(romPage);
+            m_cpu.MainMemory.SetScreenPage(screenPage);
+            if ((port7FFD & 0x20) != 0)
+                m_cpu.MainMemory.LockPaging();
+
+            // Ensure fixed banks (5 at $4000, 2 at $8000) are in the flat view.
+            m_cpu.MainMemory.SyncFixedBanks();
+        }
     }
-    
+
     private static List<byte> ReadBytes(Stream stream, int byteCount)
     {
         var data = new List<byte>(byteCount);
@@ -249,10 +321,10 @@ public class ZxFileIo
             _ => $"Unknown hardware mode: {hardwareMode}"
         };
 
-        var isSupported = hardwareMode <= 1;
+        var isSupported = hardwareMode <= 4 && hardwareMode != 2;
         if (isSupported)
             return true;
-        
+
         Logger.Instance.Warn($"Unsupported model: {modeDescription}");
         return false;
     }
@@ -273,33 +345,77 @@ public class ZxFileIo
             }
         }
     }
-    
+
     public static void LoadSna(FileInfo file, CPU cpu, out byte borderAttr)
     {
-        using (var stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read))
+        using var stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read);
+        var fileSize = stream.Length;
+        var is128K = fileSize > 49179;
+
+        cpu.TheRegisters.Clear();
+        cpu.TheRegisters.I = (byte)stream.ReadByte();
+        cpu.TheRegisters.Alt.HL = ReadZxWord(stream);
+        cpu.TheRegisters.Alt.DE = ReadZxWord(stream);
+        cpu.TheRegisters.Alt.BC = ReadZxWord(stream);
+        cpu.TheRegisters.Alt.AF = ReadZxWord(stream);
+        cpu.TheRegisters.Main.HL = ReadZxWord(stream);
+        cpu.TheRegisters.Main.DE = ReadZxWord(stream);
+        cpu.TheRegisters.Main.BC = ReadZxWord(stream);
+        cpu.TheRegisters.IY = ReadZxWord(stream);
+        cpu.TheRegisters.IX = ReadZxWord(stream);
+        cpu.TheRegisters.IFF1 = cpu.TheRegisters.IFF2 = stream.ReadByte() != 0;
+        cpu.TheRegisters.R = (byte)stream.ReadByte();
+        cpu.TheRegisters.Main.AF = ReadZxWord(stream);
+        cpu.TheRegisters.SP = ReadZxWord(stream);
+        cpu.TheRegisters.IM = (byte)stream.ReadByte();
+        borderAttr = (byte)stream.ReadByte();
+
+        // Read 48KB of RAM ($4000-$FFFF).
+        for (var i = 16384; i <= 65535; i++)
+            cpu.MainMemory.Poke((ushort)i, (byte)stream.ReadByte());
+
+        if (!is128K)
         {
-            cpu.TheRegisters.Clear();
-            cpu.TheRegisters.I = (byte)stream.ReadByte();
-            cpu.TheRegisters.Alt.HL = ReadZxWord(stream);
-            cpu.TheRegisters.Alt.DE = ReadZxWord(stream);
-            cpu.TheRegisters.Alt.BC = ReadZxWord(stream);
-            cpu.TheRegisters.Alt.AF = ReadZxWord(stream);
-            cpu.TheRegisters.Main.HL = ReadZxWord(stream);
-            cpu.TheRegisters.Main.DE = ReadZxWord(stream);
-            cpu.TheRegisters.Main.BC = ReadZxWord(stream);
-            cpu.TheRegisters.IY = ReadZxWord(stream);
-            cpu.TheRegisters.IX = ReadZxWord(stream);
-            cpu.TheRegisters.IFF1 = cpu.TheRegisters.IFF2 = stream.ReadByte() != 0;
-            cpu.TheRegisters.R = (byte)stream.ReadByte();
-            cpu.TheRegisters.Main.AF = ReadZxWord(stream);
-            cpu.TheRegisters.SP = ReadZxWord(stream);
-            cpu.TheRegisters.IM = (byte)stream.ReadByte();
-            borderAttr = (byte)stream.ReadByte();
-            for (var i = 16384; i <= 65535; i++)
-                cpu.MainMemory.Poke((ushort)i, (byte)stream.ReadByte());
+            cpu.RETN();
+            return;
         }
 
-        cpu.RETN();
+        // 128K SNA extension: PC, port $7FFD, TR-DOS flag, extra banks.
+        cpu.TheRegisters.PC = ReadZxWord(stream);
+        var port7FFD = (byte)stream.ReadByte();
+        stream.ReadByte(); // TR-DOS ROM paged flag (ignored).
+
+        if (!cpu.MainMemory.Is128K)
+            cpu.MainMemory.Init128K();
+
+        // Determine which banks are already in the 48K image.
+        // The 48K image contains: bank 5 at $4000, bank 2 at $8000, bank N at $C000.
+        var pagedBank = port7FFD & 0x07;
+
+        // Copy the 48K image regions into their bank arrays.
+        cpu.MainMemory.LoadBank(5, cpu.MainMemory.Data[0x4000..0x8000]);
+        cpu.MainMemory.LoadBank(2, cpu.MainMemory.Data[0x8000..0xC000]);
+        cpu.MainMemory.LoadBank(pagedBank, cpu.MainMemory.Data[0xC000..0x10000]);
+
+        // Read the remaining 5 banks (those not already loaded).
+        for (var bank = 0; bank < 8; bank++)
+        {
+            if (bank == 5 || bank == 2 || bank == pagedBank)
+                continue;
+            var bankData = new byte[0x4000];
+            stream.Read(bankData, 0, 0x4000);
+            cpu.MainMemory.LoadBank(bank, bankData);
+        }
+
+        // Apply port $7FFD state.
+        var romPage = (port7FFD & 0x10) != 0 ? 1 : 0;
+        var screenPage = (port7FFD & 0x08) != 0 ? 7 : 5;
+        cpu.MainMemory.SwitchBank(pagedBank);
+        cpu.MainMemory.SwitchRom(romPage);
+        cpu.MainMemory.SetScreenPage(screenPage);
+        if ((port7FFD & 0x20) != 0)
+            cpu.MainMemory.LockPaging();
+        cpu.MainMemory.SyncFixedBanks();
     }
 
     private static ushort ReadZxWord(Stream stream) =>
@@ -319,7 +435,7 @@ public class ZxFileIo
         using var stream = new FileStream(file.FullName, FileMode.Create, FileAccess.Write);
         WriteSnaToStream(stream);
     }
-    
+
     public void WriteSnaToStream(Stream stream)
     {
         try

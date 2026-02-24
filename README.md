@@ -29,10 +29,13 @@ This fork extends ZX Speculator with **DZRP (DeZog Remote Protocol)** support to
 ---
 
 ## Features
+- **128K Spectrum Support**: Full 128K memory banking with port $7FFD paging, shadow screen, and switchable ROM. Loads 128K .z80 (v2/v3) and .sna files. Supply a 32KB 128K ROM to enable (not bundled due to copyright).
+- **Instant TAP Loading**: TAP files load instantly by trapping the ROM's LD-BYTES routine. Use `--tap-realtime` for the original signal-based loading.
+- **TR-DOS/SCL Disk Images**: Load .trd and .scl disk images directly. The loader parses the catalog and auto-loads the first CODE or BASIC file.
 - **DZRP Support** *(This Fork)*: External debugging via VS Code's [DeZog extension](https://marketplace.visualstudio.com/items?itemName=maziac.dezog). Control execution, set breakpoints, inspect registers and memory.
 - **Cross Platform**: Built using [Avalonia](https://avaloniaui.net/), ensuring compatibility across various platforms.
 - **Key Mapping**: Most keys on a modern PC keyboard are automatically mapped to the Spectrum, making it much easier to type in code.
-- **File Format Support**: Compatible with .z80, .bin, .scr, .tap, and .sna files.
+- **File Format Support**: Compatible with .z80, .bin, .scr, .tap, .sna, .trd, and .scl files.
 - **Archive Support**: Load files directly from `.zip` archives.
 - **Display**: Optional CRT TV and 'Ambient Blur' effects. ![CRT](img/CRT.png)
 - **Joysticks**: Kempston and Cursor joystick support.
@@ -66,9 +69,38 @@ Developed on a Mac environment, ZX Speculator is also tested on Windows and pass
 Common ZX Spectrum image files (.z80, .sna, etc) can be opened from the File->Open menu.
 
 ### Loading .tap Files
-1. Type `Load ""` in BASIC.
-2. The File->Open dialog will automatically open, allowing a .tap file to be specified.
-3. Enjoy the loading experience.
+
+TAP files now load instantly by default using trap loading (intercepting the ROM's tape routine). Just open the file and it loads in a fraction of a second.
+
+To use the original real-time tape signal loading (slow, but accurate for non-standard loaders):
+```bash
+zxs --tap-realtime game.tap
+```
+
+Or the classic way: Type `Load ""` in BASIC, and the File->Open dialog will open.
+
+### 128K Spectrum Mode
+
+To run 128K software, place a 32KB 128K Spectrum ROM file (not bundled due to copyright) in the `ROMs/` directory alongside the 48K ROM. When a 32KB ROM is detected, the emulator automatically enables:
+
+- **8 x 16KB RAM banks** with port $7FFD paging
+- **Shadow screen** (screen page 5 or 7)
+- **Switchable ROM** (ROM 0: 128K editor, ROM 1: 48K BASIC)
+- **128K .z80 and .sna file loading** with correct bank/page restoration
+
+```bash
+zxs --machine 128k game.z80     # 128K Spectrum timing
+zxs --machine pentagon game.z80  # Pentagon 128 timing
+```
+
+### Loading TR-DOS / SCL Disk Images
+
+TR-DOS (.trd) and SCL (.scl) disk images can be loaded directly. The loader parses the disk catalog and auto-loads the first CODE file (or BASIC file if no CODE is found):
+
+```bash
+zxs game.trd
+zxs game.scl
+```
 
 ### Keyboard
 Move the mouse pointer to the small keyboard icon at the top-right of the screen to see a representation of the ZX Spectrum keyboard.
@@ -149,6 +181,10 @@ Run `zxs --help` for full usage. Key flags:
 | `--dzrp-port <port>` | Custom port (default: 11000) |
 | `--debugger` | Open debugger view on startup |
 | `--trace` | Enable DZRP protocol tracing (prints all commands/responses) |
+| `--machine <model>` | Machine model: `48k` (default), `128k`, `pentagon` |
+| `--contention` | Enable ULA memory contention (accurate timing) |
+| `--tap-realtime` | Force real-time TAP signal loading (slow but accurate) |
+| `--max-speed` | Disable emulation throttle (run as fast as possible) |
 | `--no-keyboard-hook` | Disable keyboard hooks (auto-enabled with --dzrp) |
 | `--with-keyboard-hook` | Force enable keyboard hooks even in DZRP mode |
 | `--break-at <spec>` | Break into debugger when condition is met (see below) |
@@ -156,6 +192,7 @@ Run `zxs --help` for full usage. Key flags:
 | `--dump-keyframes <dir>` | Save frames only when screen content changes |
 | `--frame-spec <spec>` | Frame range specification (default: all frames) |
 | `--no-border` | Capture 256x192 screen only (no border area) |
+| `--timestamp` | Add hex microsecond timestamps to dump filenames |
 
 ### Environment Variables
 

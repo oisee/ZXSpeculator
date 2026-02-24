@@ -38,6 +38,8 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
     private string m_breakAt;
     private bool m_maxSpeed;
     private bool m_timestamp;
+    private bool m_contention;
+    private bool m_tapRealtime;
 
     public ZxSpectrum Speccy { get; }
     public ZxDisplay Display { get; }
@@ -53,8 +55,11 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
 
     public MainWindowViewModel(string[] args = null)
     {
+        // Pre-parse --machine flag before creating emulator components.
+        var profile = PreParseMachineProfile(args);
+
         Display = new ZxDisplay();
-        Speccy = new ZxSpectrum(Display);
+        Speccy = new ZxSpectrum(Display, profile);
         Speccy.PortHandler.EmulateCursorJoystick = Settings.EmulateCursorJoystick;
         Speccy.TheCpu.LoadRequested += (_, _) =>
         {
@@ -143,6 +148,14 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
         // Enable break-at conditions if requested via command line
         if (m_breakAt != null)
             Speccy.EnableBreakAt(m_breakAt);
+
+        // Enable ULA contention if requested
+        if (m_contention)
+            Speccy.EnableContention();
+
+        // Force real-time TAP loading if requested
+        if (m_tapRealtime)
+            Speccy.SetTapRealtime(true);
 
         return;
 
@@ -385,22 +398,59 @@ public class MainWindowViewModel : ViewModelBase, IDisposable
                     m_timestamp = true;
                     Console.WriteLine("Timestamp: hex microseconds in filenames");
                     break;
+
+                case "--machine" when i + 1 < args.Length:
+                    // Already handled by PreParseMachineProfile, just skip the value.
+                    i++;
+                    break;
+
+                case "--contention":
+                    m_contention = true;
+                    Console.WriteLine("ULA contention: enabled");
+                    break;
+
+                case "--tap-realtime":
+                    m_tapRealtime = true;
+                    Console.WriteLine("TAP loading: real-time signal mode");
+                    break;
             }
         }
     }
 
+    /// <summary>
+    /// Pre-parse the --machine flag from args before constructing emulator components.
+    /// </summary>
+    private static MachineProfile PreParseMachineProfile(string[] args)
+    {
+        if (args == null)
+            return null;
+        for (var i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i] != "--machine")
+                continue;
+            var profile = MachineProfile.FromName(args[i + 1]);
+            Console.WriteLine($"Machine: {profile.Name}");
+            return profile;
+        }
+        return null;
+    }
+
     private static void PrintHelp()
     {
-        Console.WriteLine(@"ZX Speculator - ZX Spectrum 48K Emulator
+        Console.WriteLine(@"ZX Speculator - ZX Spectrum Emulator
 
 Usage: zxs [OPTIONS] [FILE]
 
 Arguments:
-  FILE                         Load a file on startup (.z80, .sna, .tap, .scr, .bin, .zip)
+  FILE                         Load a file on startup (.z80, .sna, .tap, .scr, .bin, .zip,
+                               .trd, .scl)
 
 General:
   -h, --help                   Show this help message and exit
   --max-speed                  Disable emulation throttle (run as fast as possible)
+  --machine <MODEL>            Select machine: 48k (default), 128k, pentagon
+  --contention                 Enable ULA memory contention (accurate timing)
+  --tap-realtime               Force real-time TAP signal loading (slow but accurate)
 
 Display:
   --debugger                   Open debugger view on startup
@@ -447,13 +497,21 @@ Environment Variables:
 
 Examples:
   zxs game.z80                                     Load and run a game
+  zxs --machine pentagon game.z80                   Pentagon 128 timing (320 lines, no contention)
+  zxs --contention game.z80                         Enable ULA memory contention
   zxs --dzrp --dzrp-bind 0.0.0.0                   Start with DZRP debug server
   zxs --break-at ""PC=8000"" game.z80                Break when PC hits 0x8000
   zxs --break-at ""T=100000,OP=FF"" game.z80         Break at T-state or RST 38
   zxs --break-at ""DI:HALT"" game.z80                 Break on stuck CPU (DI + HALT)
   zxs --dump-frames /tmp/frames game.z80            Capture every frame
   zxs --dump-keyframes /tmp/kf --no-border game.z80 Capture screen changes, no border
-  zxs --dump-frames /tmp/f --frame-spec ""load-end..load-end+200"" game.tap");
+  zxs --dump-frames /tmp/f --frame-spec ""load-end..load-end+200"" game.tap
+  zxs --tap-realtime game.tap                        Slow but accurate tape loading
+  zxs game.trd                                       Load TR-DOS disk image
+
+Notes:
+  128K mode requires a 32KB ROM file (not bundled due to copyright).
+  Place it in the ROMs directory alongside the 48K ROM.");
     }
 
     /// <summary>
@@ -465,6 +523,6 @@ Examples:
         if (index <= 0)
             return false;
         var prev = args[index - 1];
-        return prev is "--dzrp-port" or "--dzrp-bind" or "--dump-frames" or "--dump-keyframes" or "--frame-spec" or "--break-at";
+        return prev is "--dzrp-port" or "--dzrp-bind" or "--dump-frames" or "--dump-keyframes" or "--frame-spec" or "--break-at" or "--machine";
     }
 }
